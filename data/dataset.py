@@ -112,6 +112,7 @@ set_track_meta(False)
 def get_augmented_train_dataset():
     global _augmented_train_dataset
     if _augmented_train_dataset is None:
+        set_track_meta(True)
         _augmented_train_dataset = CacheDataset(
             data=datalist,
             transform=train_transforms,
@@ -119,12 +120,14 @@ def get_augmented_train_dataset():
             cache_rate=1.0,
             num_workers=8,
         )
+        set_track_meta(False)
     return _augmented_train_dataset
 
 def get_origin_train_dataset():
     '''注意: 使用了和验证集一样的 transform，因而有元数据'''
     global _origin_train_dataset
     if _origin_train_dataset is None:
+        set_track_meta(True)
         _origin_train_dataset = CacheDataset(
             data=datalist,
             transform=val_transforms,
@@ -132,11 +135,13 @@ def get_origin_train_dataset():
             cache_rate=1.0,
             num_workers=8,
         )
+        set_track_meta(False)
     return _origin_train_dataset
 
 def get_val_dataset():
     global _val_dataset
     if _val_dataset is None:
+        set_track_meta(True)
         val_dataset = CacheDataset(
             data=val_files, 
             transform=val_transforms, 
@@ -144,6 +149,7 @@ def get_val_dataset():
             cache_rate=1.0, 
             num_workers=4
         )
+        set_track_meta(False)
     return _val_dataset
 
 def get_augmented_train_loader(batch_size=1):
