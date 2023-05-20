@@ -154,3 +154,7 @@ def get_origin_train_loader(batch_size=1):
 
 def get_val_loader(batch_size=1):
     return ThreadDataLoader(get_val_dataset(), num_workers=0, batch_size=1)
+
+it = get_augmented_train_loader()
+for i in it:
+    print(i, end = '\n')
