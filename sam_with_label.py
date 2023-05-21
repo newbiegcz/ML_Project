@@ -275,7 +275,8 @@ val_dataloader = get_data_loader("validation", "naive_to_rgb_and_preprocess", ba
 
 wandb_logger = WandbLogger(name="task3_debug",
                            project="SAM with Labels",
-                           entity='ml-project-2023')
+                           entity='ml-project-2023',
+                           dir="./wandb")
 trainer = pl.Trainer(max_epochs=max_epochs, 
                      profiler="advanced", 
                      accelerator="cpu" if cpu_only else "auto",
