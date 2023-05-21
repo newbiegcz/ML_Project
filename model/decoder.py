@@ -21,8 +21,9 @@ class MaskLabelDecoder(MaskDecoder):
         self.label_head_depth_dim = label_head_hidden_dim
 
         self.label_token = nn.Embedding(1, self.transformer_dim)
+        # TODO: 这样写太 naive 了.. 记得改掉 
         self.label_prediction_head = MLP(
-            self.transformer_dim, label_head_hidden_dim, self.num_mask_tokens, label_head_depth
+            self.transformer_dim, label_head_hidden_dim, 14, label_head_depth
         )
         
     def forward(
@@ -32,12 +33,14 @@ class MaskLabelDecoder(MaskDecoder):
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
         multimask_output: bool,
+        already_unfolded = False
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         masks, iou_pred, label_pred = self.predict_masks(
             image_embeddings=image_embeddings,
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
             dense_prompt_embeddings=dense_prompt_embeddings,
+            already_unfolded=already_unfolded
         )
 
         # Select the correct mask or masks for output
@@ -47,7 +50,9 @@ class MaskLabelDecoder(MaskDecoder):
             mask_slice = slice(0, 1)
         masks = masks[:, mask_slice, :, :]
         iou_pred = iou_pred[:, mask_slice]
-        label_pred = label_pred[:, mask_slice]
+        label_pred = label_pred.reshape(
+                label_pred.shape[0], 14
+            )
 
         # Prepare output
         return masks, iou_pred, label_pred
@@ -58,6 +63,7 @@ class MaskLabelDecoder(MaskDecoder):
         image_pe: torch.Tensor,
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
+        already_unfolded = False
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
@@ -65,10 +71,16 @@ class MaskLabelDecoder(MaskDecoder):
         output_tokens = output_tokens.unsqueeze(0).expand(sparse_prompt_embeddings.size(0), -1, -1)
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
 
-        # Expand per-image data in batch direction to be per-mask
-        src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
-        src = src + dense_prompt_embeddings
-        pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
+        if not already_unfolded:
+            # Expand per-image data in batch direction to be per-mask
+            src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
+            src = src + dense_prompt_embeddings
+            pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
+        else :
+            src = image_embeddings
+            src = src + dense_prompt_embeddings
+            pos_src = image_pe
+        
         b, c, h, w = src.shape
 
         # Run the transformer

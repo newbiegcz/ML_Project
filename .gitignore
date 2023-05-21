@@ -190,3 +190,5 @@ Temporary Items
 .apdisk
 /raw_data/
 /checkpoint/
+/lightning_logs/
+/wandb/

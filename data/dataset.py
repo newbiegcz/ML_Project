@@ -24,8 +24,6 @@ from monai.transforms import (
 
 # TODO: 考虑 cache encoder 的结果
 
-# TODO: 避免破坏长宽比的 reset
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 data_dir = "raw_data/"
 split_json = "dataset_0.json"
@@ -34,19 +32,62 @@ datasets = data_dir + split_json
 
 data_files = {
     "training": load_decathlon_datalist(datasets, True, "training"),
-    "valdation": load_decathlon_datalist(datasets, True, "validation")
+    "validation": load_decathlon_datalist(datasets, True, "validation")
 }
 
+class DictTransform:
+    def __init__(self, keys, transform):
+        self.keys = keys
+        self.transform = transform
+
+    def __call__(self, x):
+        x = x.copy()
+        for key in self.keys:
+            x[key] = self.transform(x[key])
+        return x
+    
+class PreprocessForModel:
+    pixel_mean=torch.Tensor([123.675, 116.28, 103.53]).view(-1, 1, 1)
+    pixel_std=torch.Tensor([58.395, 57.12, 57.375]).view(-1, 1, 1)
+    img_size=1024
+
+    def get_preprocess_shape(self, oldh: int, oldw: int, long_side_length: int):
+        scale = long_side_length * 1.0 / max(oldh, oldw)
+        newh, neww = oldh * scale, oldw * scale
+        neww = int(neww + 0.5)
+        newh = int(newh + 0.5)
+        return (newh, neww)
+
+    def __call__(self, x):
+        x = x.copy()
+        target_size = self.get_preprocess_shape(x['image'].shape[1], x['image'].shape[2], self.img_size)
+        tr_img = torchvision.transforms.Resize(target_size, interpolation=torchvision.transforms.InterpolationMode.BILINEAR, antialias=True)
+        tr_label = torchvision.transforms.Resize(target_size, interpolation=torchvision.transforms.InterpolationMode.NEAREST_EXACT, antialias=False)
+        x['image'] = tr_img(x['image'])
+        x['label'] = tr_label(x['label'])
+
+        x['image'] = (x['image'] - self.pixel_mean.to(x['image'].device)) / self.pixel_std.to(x['image'].device)
+        h, w = target_size
+        padh = self.img_size - h
+        padw = self.img_size - w
+        x['image'] = torch.nn.functional.pad(x['image'], (0, padw, 0, padh))
+        x['label'] = torch.nn.functional.pad(x['label'], (0, padw, 0, padh))
+        return x
+    
+
+
 transforms = {
-    "naive_to_rgb_and_resize": torchvision.transforms.Compose(
-        [torchvision.transforms.Lambda(lambda x: x.unsqueeze(0)),
-         torchvision.transforms.Resize((512, 512), antialias=True),
-         torchvision.transforms.Lambda(lambda x: x.repeat(3, 1, 1))]
+    "naive_to_rgb_and_preprocess": torchvision.transforms.Compose(
+        [DictTransform(["image", "label"], torchvision.transforms.Lambda(lambda x: x.unsqueeze(0).repeat(3, 1, 1))),
+        PreprocessForModel()]
     )
 }
 
 class Dataset2D(data.Dataset):
-    def __init__(self, files, *, device, transform):
+    def __init__(self, files, *, device, transform, first_only=False):
+        if first_only:
+            files = files.copy()[:1]
+
         self.files = files
         self.device = device
         self.transform = transform
@@ -60,6 +101,7 @@ class Dataset2D(data.Dataset):
                 EnsureTyped(keys=["image", "label"], device=self.device, track_meta=False),
             ]
         )
+        
         self.cache = CacheDataset(
             data=files, 
             transform=_default_transform, 
@@ -85,15 +127,16 @@ class Dataset2D(data.Dataset):
     def __getitem__(self, idx):
         ret = self.data_list[idx].copy()
         if self.transform:
-            ret['image'] = self.transform(ret['image'])
-        return ret
+            return self.transform(ret)
+        else:
+            return ret
     
-def get_data_loader(file_key, transform_key, batch_size, shuffle, device=device):
+def get_data_loader(file_key, transform_key, batch_size, shuffle, device=device, first_only=False):
     assert file_key in data_files.keys(), "Invalid file key!"
     assert transform_key in transforms.keys(), "Invalid transform key!"
     loader = ThreadDataLoader(Dataset2D(data_files[file_key], 
                                         transform=transforms[transform_key],
-                                        device=device), 
+                                        device=device, first_only=first_only), 
                                     batch_size=batch_size, 
                                     num_workers=0, 
                                     shuffle=shuffle)
@@ -101,7 +144,7 @@ def get_data_loader(file_key, transform_key, batch_size, shuffle, device=device)
 
 if __name__ == "__main__":
     import rich, cv2
-    it = get_data_iter("training", "naive_to_rgb_and_resize", batch_size=1, shuffle=False)
+    it = get_data_loader("training", "naive_to_rgb_and_preprocess", batch_size=1, shuffle=False)
     res_w = 0
     res_h = 0
     for d in it:
@@ -115,5 +158,7 @@ if __name__ == "__main__":
     input("")
     while True:
         for d in it:
-            cv2.imshow("qwq", d['image'][0].numpy().transpose(1, 2, 0))
+            v = d['image'][0].clone()
+            v[0] = d['label'][0][0] / 14 + d['image'][0][0]
+            cv2.imshow("qwq", v.cpu().numpy().transpose(1, 2, 0))
             cv2.waitKey(100)
