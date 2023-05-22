@@ -270,8 +270,8 @@ checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
 sam_module = SAMWithLabelModule(get_sam_with_label(checkpoint_path))
 
 # first_only 用于 debug，记得改回来
-train_dataloader = get_data_loader("training", "naive_to_rgb_and_preprocess", batch_size, True, device=data_device, first_only=False)
-val_dataloader = get_data_loader("validation", "naive_to_rgb_and_preprocess", batch_size, False, device=data_device, first_only=False)
+train_dataloader = get_data_loader("training", "naive_to_rgb_and_normalize", batch_size, True, device=data_device, first_only=False)
+val_dataloader = get_data_loader("validation", "naive_to_rgb_and_normalize", batch_size, False, device=data_device, first_only=False)
 
 wandb_logger = WandbLogger(name="task3_debug",
                            project="SAM with Labels",
