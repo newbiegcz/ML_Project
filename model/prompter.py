@@ -11,12 +11,12 @@ class Prompter(torch.nn.Module):
 			 返回一个可以直接给 sam.predict 的 dict
 			   表示选择的 prompt'''
 		result = dict()
-		result["multimask_output"] = True
+		result["multimask_output"] = False
 		if num == 1:
 			dst = cv.distanceTransform(mask, cv.DIST_L2, 3)
 			ind = np.unravel_index(np.argmax(dst, axis = None), dst.shape)
-			print(ind[0], ind[1])
-			result["point_coords"] = np.array([ind])
+			result["point_coords"] = np.array([[ind[1], ind[0]]])
+			print(result["point_coords"])
 			result["point_labels"] = np.array([1])
 		else:
 			x, y = mask.shape
