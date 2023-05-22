@@ -1,162 +1,164 @@
 import torch
-from rich import print as print
+import torchvision
 from monai.data import (
-    ThreadDataLoader,
-    CacheDataset,
     load_decathlon_datalist,
     set_track_meta,
+    ThreadDataLoader,
+    CacheDataset
 )
+import torch.utils.data as data
 
 from monai.transforms import (
-    AsDiscrete,
     Compose,
     CropForegroundd,
     LoadImaged,
     Orientationd,
-    RandFlipd,
-    RandCropByPosNegLabeld,
-    RandShiftIntensityd,
     ScaleIntensityRanged,
     Spacingd,
-    RandRotate90d,
     EnsureTyped,
 )
 
-device = torch.device("cpu")
+# TODO: 数据增广，特别是 RGB & 随机漂移
+
+# TODO: 把 3d array cache 到内存里
+
+# TODO: 考虑 cache encoder 的结果
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 data_dir = "raw_data/"
 split_json = "dataset_0.json"
 
-num_samples = 4
-
-train_transforms = Compose(
-    [
-        LoadImaged(keys=["image", "label"], ensure_channel_first=True),
-        ScaleIntensityRanged(
-            keys=["image"],
-            a_min=-175,
-            a_max=250,
-            b_min=0.0,
-            b_max=1.0,
-            clip=True,
-        ),
-        CropForegroundd(keys=["image", "label"], source_key="image"),
-        Orientationd(keys=["image", "label"], axcodes="RAS"),
-        Spacingd(
-            keys=["image", "label"],
-            pixdim=(1.5, 1.5, 2.0),
-            mode=("bilinear", "nearest"),
-        ),
-        EnsureTyped(keys=["image", "label"], device=device, track_meta=False),
-        RandCropByPosNegLabeld(
-            keys=["image", "label"],
-            label_key="label",
-            spatial_size=(96, 96, 96),
-            pos=1,
-            neg=1,
-            num_samples=num_samples,
-            image_key="image",
-            image_threshold=0,
-        ),
-        RandFlipd(
-            keys=["image", "label"],
-            spatial_axis=[0],
-            prob=0.10,
-        ),
-        RandFlipd(
-            keys=["image", "label"],
-            spatial_axis=[1],
-            prob=0.10,
-        ),
-        RandFlipd(
-            keys=["image", "label"],
-            spatial_axis=[2],
-            prob=0.10,
-        ),
-        RandRotate90d(
-            keys=["image", "label"],
-            prob=0.10,
-            max_k=3,
-        ),
-        RandShiftIntensityd(
-            keys=["image"],
-            offsets=0.10,
-            prob=0.50,
-        ),
-    ]
-)
-val_transforms = Compose(
-    [
-        LoadImaged(keys=["image", "label"], ensure_channel_first=True),
-        ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True),
-        CropForegroundd(keys=["image", "label"], source_key="image"),
-        Orientationd(keys=["image", "label"], axcodes="RAS"),
-        Spacingd(
-            keys=["image", "label"],
-            pixdim=(1.5, 1.5, 2.0),
-            mode=("bilinear", "nearest"),
-        ),
-        EnsureTyped(keys=["image", "label"], device=device, track_meta=True),
-    ]
-)
-
-
 datasets = data_dir + split_json
-datalist = load_decathlon_datalist(datasets, True, "training")
-val_files = load_decathlon_datalist(datasets, True, "validation")
 
-_origin_train_dataset = None
-_augmented_train_dataset = None
-_val_dataset = None
-set_track_meta(False)
+data_files = {
+    "training": load_decathlon_datalist(datasets, True, "training"),
+    "validation": load_decathlon_datalist(datasets, True, "validation")
+}
 
-def get_augmented_train_dataset():
-    global _augmented_train_dataset
-    if _augmented_train_dataset is None:
+class DictTransform:
+    def __init__(self, keys, transform):
+        self.keys = keys
+        self.transform = transform
+
+    def __call__(self, x):
+        x = x.copy()
+        for key in self.keys:
+            x[key] = self.transform(x[key])
+        return x
+    
+class PreprocessForModel:
+    pixel_mean=torch.Tensor([123.675, 116.28, 103.53]).view(-1, 1, 1)
+    pixel_std=torch.Tensor([58.395, 57.12, 57.375]).view(-1, 1, 1)
+    img_size=1024
+
+    def get_preprocess_shape(self, oldh: int, oldw: int, long_side_length: int):
+        scale = long_side_length * 1.0 / max(oldh, oldw)
+        newh, neww = oldh * scale, oldw * scale
+        neww = int(neww + 0.5)
+        newh = int(newh + 0.5)
+        return (newh, neww)
+
+    def __call__(self, x):
+        x = x.copy()
+        target_size = self.get_preprocess_shape(x['image'].shape[1], x['image'].shape[2], self.img_size)
+        tr_img = torchvision.transforms.Resize(target_size, interpolation=torchvision.transforms.InterpolationMode.BILINEAR, antialias=True)
+        tr_label = torchvision.transforms.Resize(target_size, interpolation=torchvision.transforms.InterpolationMode.NEAREST_EXACT, antialias=False)
+        x['image'] = tr_img(x['image'])
+        x['label'] = tr_label(x['label'])
+
+        x['image'] = (x['image'] - self.pixel_mean.to(x['image'].device)) / self.pixel_std.to(x['image'].device)
+        h, w = target_size
+        padh = self.img_size - h
+        padw = self.img_size - w
+        x['image'] = torch.nn.functional.pad(x['image'], (0, padw, 0, padh))
+        x['label'] = torch.nn.functional.pad(x['label'], (0, padw, 0, padh))
+        return x
+    
+
+
+transforms = {
+    "naive_to_rgb_and_preprocess": torchvision.transforms.Compose(
+        [DictTransform(["image", "label"], torchvision.transforms.Lambda(lambda x: x.unsqueeze(0).repeat(3, 1, 1))),
+        PreprocessForModel()]
+    )
+}
+
+class Dataset2D(data.Dataset):
+    def __init__(self, files, *, device, transform, first_only=False):
+        if first_only:
+            files = files.copy()[:1]
+
+        self.files = files
+        self.device = device
+        self.transform = transform
         set_track_meta(True)
-        _augmented_train_dataset = CacheDataset(
-            data=datalist,
-            transform=train_transforms,
-            cache_num=24,
-            cache_rate=1.0,
-            num_workers=8,
+        _default_transform = Compose(
+            [
+                LoadImaged(keys=["image", "label"], ensure_channel_first=True),
+                ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True),
+                CropForegroundd(keys=["image", "label"], source_key="image"),
+                Orientationd(keys=["image", "label"], axcodes="RAS"),
+                EnsureTyped(keys=["image", "label"], device=self.device, track_meta=False),
+            ]
         )
-        set_track_meta(False)
-    return _augmented_train_dataset
-
-def get_origin_train_dataset():
-    '''注意: 使用了和验证集一样的 transform，因而有元数据'''
-    global _origin_train_dataset
-    if _origin_train_dataset is None:
-        set_track_meta(True)
-        _origin_train_dataset = CacheDataset(
-            data=datalist,
-            transform=val_transforms,
-            cache_num=24,
-            cache_rate=1.0,
-            num_workers=8,
-        )
-        set_track_meta(False)
-    return _origin_train_dataset
-
-def get_val_dataset():
-    global _val_dataset
-    if _val_dataset is None:
-        set_track_meta(True)
-        val_dataset = CacheDataset(
-            data=val_files, 
-            transform=val_transforms, 
-            cache_num=6, 
+        
+        self.cache = CacheDataset(
+            data=files, 
+            transform=_default_transform, 
             cache_rate=1.0, 
             num_workers=4
         )
         set_track_meta(False)
-    return _val_dataset
 
-def get_augmented_train_loader(batch_size=1):
-    return ThreadDataLoader(get_augmented_train_dataset(), num_workers=0, batch_size=batch_size, shuffle=False)
+        self.data_list = []
+        for d in self.cache:
+            img, label = d['image'][0], d['label'][0]
+            h = img.shape[2]
+            for i in range(h):
+                self.data_list.append({
+                    "image": img[:, :, i],
+                    "label": label[:, :, i],
+                    "h": i / h
+                })
 
-def get_origin_train_loader(batch_size=1):
-    return ThreadDataLoader(get_origin_train_dataset(), num_workers=0, batch_size=batch_size, shuffle=False)
+    def __len__(self):
+        return len(self.data_list)
 
-def get_val_loader(batch_size=1):
-    return ThreadDataLoader(get_val_dataset(), num_workers=0, batch_size=1)
+    def __getitem__(self, idx):
+        ret = self.data_list[idx].copy()
+        if self.transform:
+            return self.transform(ret)
+        else:
+            return ret
+    
+def get_data_loader(file_key, transform_key, batch_size, shuffle, device=device, first_only=False):
+    assert file_key in data_files.keys(), "Invalid file key!"
+    assert transform_key in transforms.keys(), "Invalid transform key!"
+    loader = ThreadDataLoader(Dataset2D(data_files[file_key], 
+                                        transform=transforms[transform_key],
+                                        device=device, first_only=first_only), 
+                                    batch_size=batch_size, 
+                                    num_workers=0, 
+                                    shuffle=shuffle)
+    return loader 
+
+if __name__ == "__main__":
+    import rich, cv2
+    it = get_data_loader("training", "naive_to_rgb_and_preprocess", batch_size=1, shuffle=False)
+    res_w = 0
+    res_h = 0
+    for d in it:
+        res_w = max(res_w, d['image'].shape[2])
+        res_h = max(res_h, d['image'].shape[3])
+    rich.print(res_w, res_h)
+    input("")
+    d = next(iter(it))
+    rich.print(d)
+    rich.print(d["image"].shape)
+    input("")
+    while True:
+        for d in it:
+            v = d['image'][0].clone()
+            v[0] = d['label'][0][0] / 14 + d['image'][0][0]
+            cv2.imshow("qwq", v.cpu().numpy().transpose(1, 2, 0))
+            cv2.waitKey(100)
