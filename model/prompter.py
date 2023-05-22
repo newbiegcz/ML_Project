@@ -15,6 +15,7 @@ class Prompter(torch.nn.Module):
 		if num == 1:
 			dst = cv.distanceTransform(mask, cv.DIST_L2, 3)
 			ind = np.unravel_index(np.argmax(dst, axis = None), dst.shape)
+			print(ind[0], ind[1])
 			result["point_coords"] = np.array([ind])
 			result["point_labels"] = np.array([1])
 		else:
