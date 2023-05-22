@@ -1,19 +1,21 @@
 import torch
-from monai.data import decollate_batch
-from monai.metrics import DiceMetric
+from torchmetrics import Dice
 
 def evaluate(predicter, data_iter):
-    dice_metric = DiceMetric(include_background=True, reduction="mean", get_not_nans=False)
+
+    dice_val = 0.00
+    num = 0
 
     for batch in data_iter:
-        val_inputs, val_labels = (batch["image"].cuda(), batch["label"].cuda())
-        val_outputs = predicter(val_inputs)
-        val_labels_list = decollate_batch(val_labels)
-        val_labels_convert = [post_label(val_label_tensor) for val_label_tensor in val_labels_list]
-        val_outputs_list = decollate_batch(val_outputs)
-        val_output_convert = [post_pred(val_pred_tensor) for val_pred_tensor in val_outputs_list]
-        dice_metric(y_pred=val_output_convert, y=val_labels_convert)
-        mean_dice_val = dice_metric.aggregate().item()
-        dice_metric.reset()
+        val_inputs, val_labels = (batch["image"], batch["label"])
+        _, _ , n, _, _ = val_inputs.shape
+        dice = Dice(ignore_index = 0)
+        for i in range(170, 171):
+            val_outputs = predicter(val_inputs[0,0,:,:,i], val_labels[0,0,:,:,i])
+            cur = dice(torch.tensor(val_outputs, dtype = torch.int), torch.tensor(val_labels[0,0,:,:,i], dtype = torch.int))
+            print("DICE: %.6lf" %cur)
+            dice_val += cur
+            num += 1
+        break
         
-    return mean_dice_val
+    return dice_val / float(num)

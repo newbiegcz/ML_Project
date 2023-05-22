@@ -1,5 +1,5 @@
-
 import torch
+from rich import print as print
 from monai.data import (
     ThreadDataLoader,
     CacheDataset,
@@ -22,7 +22,7 @@ from monai.transforms import (
     EnsureTyped,
 )
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 data_dir = "raw_data/"
 split_json = "dataset_0.json"
 
@@ -112,6 +112,7 @@ set_track_meta(False)
 def get_augmented_train_dataset():
     global _augmented_train_dataset
     if _augmented_train_dataset is None:
+        set_track_meta(True)
         _augmented_train_dataset = CacheDataset(
             data=datalist,
             transform=train_transforms,
@@ -119,12 +120,14 @@ def get_augmented_train_dataset():
             cache_rate=1.0,
             num_workers=8,
         )
+        set_track_meta(False)
     return _augmented_train_dataset
 
 def get_origin_train_dataset():
     '''注意: 使用了和验证集一样的 transform，因而有元数据'''
     global _origin_train_dataset
     if _origin_train_dataset is None:
+        set_track_meta(True)
         _origin_train_dataset = CacheDataset(
             data=datalist,
             transform=val_transforms,
@@ -132,11 +135,13 @@ def get_origin_train_dataset():
             cache_rate=1.0,
             num_workers=8,
         )
+        set_track_meta(False)
     return _origin_train_dataset
 
 def get_val_dataset():
     global _val_dataset
     if _val_dataset is None:
+        set_track_meta(True)
         val_dataset = CacheDataset(
             data=val_files, 
             transform=val_transforms, 
@@ -144,17 +149,14 @@ def get_val_dataset():
             cache_rate=1.0, 
             num_workers=4
         )
+        set_track_meta(False)
     return _val_dataset
 
 def get_augmented_train_loader(batch_size=1):
-    return ThreadDataLoader(get_augmented_train_dataset(), num_workers=0, batch_size=batch_size, shuffle=True)
+    return ThreadDataLoader(get_augmented_train_dataset(), num_workers=0, batch_size=batch_size, shuffle=False)
 
 def get_origin_train_loader(batch_size=1):
-    return ThreadDataLoader(get_origin_train_dataset(), num_workers=0, batch_size=batch_size, shuffle=True)
+    return ThreadDataLoader(get_origin_train_dataset(), num_workers=0, batch_size=batch_size, shuffle=False)
 
 def get_val_loader(batch_size=1):
     return ThreadDataLoader(get_val_dataset(), num_workers=0, batch_size=1)
-
-it = get_augmented_train_loader()
-for i in it:
-    print(i, end = '\n')
