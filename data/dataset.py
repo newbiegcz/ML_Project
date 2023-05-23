@@ -51,6 +51,9 @@ class PreprocessForModel:
     pixel_std=torch.Tensor([58.395, 57.12, 57.375]).view(-1, 1, 1)
     img_size=1024
 
+    def __init__(self, normalize=False):
+        self.normalize = normalize
+
     def get_preprocess_shape(self, oldh: int, oldw: int, long_side_length: int):
         scale = long_side_length * 1.0 / max(oldh, oldw)
         newh, neww = oldh * scale, oldw * scale
@@ -66,7 +69,8 @@ class PreprocessForModel:
         x['image'] = tr_img(x['image'])
         x['label'] = tr_label(x['label'])
 
-        x['image'] = (x['image'] - self.pixel_mean.to(x['image'].device)) / self.pixel_std.to(x['image'].device)
+        if self.normalize:
+            x['image'] = (x['image'] - self.pixel_mean.to(x['image'].device)) / self.pixel_std.to(x['image'].device)
         h, w = target_size
         padh = self.img_size - h
         padw = self.img_size - w
@@ -77,10 +81,14 @@ class PreprocessForModel:
 
 
 transforms = {
-    "naive_to_rgb_and_preprocess": torchvision.transforms.Compose(
+    "naive_to_rgb_and_normalize": torchvision.transforms.Compose(
         [DictTransform(["image", "label"], torchvision.transforms.Lambda(lambda x: x.unsqueeze(0).repeat(3, 1, 1))),
-        PreprocessForModel()]
-    )
+        PreprocessForModel(normalize=True)]
+    ),
+    "naive_to_rgb": torchvision.transforms.Compose(
+        [DictTransform(["image", "label"], torchvision.transforms.Lambda(lambda x: x.unsqueeze(0).repeat(3, 1, 1))),
+        PreprocessForModel(normalize=False)]
+    ),
 }
 
 class Dataset2D(data.Dataset):
@@ -144,7 +152,7 @@ def get_data_loader(file_key, transform_key, batch_size, shuffle, device=device,
 
 if __name__ == "__main__":
     import rich, cv2
-    it = get_data_loader("training", "naive_to_rgb_and_preprocess", batch_size=1, shuffle=False)
+    it = get_data_loader("training", "naive_to_rgb", batch_size=1, shuffle=False)
     res_w = 0
     res_h = 0
     for d in it:
@@ -161,4 +169,4 @@ if __name__ == "__main__":
             v = d['image'][0].clone()
             v[0] = d['label'][0][0] / 14 + d['image'][0][0]
             cv2.imshow("qwq", v.cpu().numpy().transpose(1, 2, 0))
-            cv2.waitKey(100)
+            cv2.waitKey(10)
