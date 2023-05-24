@@ -1,3 +1,6 @@
 lightning==2.0.2
 monai[nibabel]==1.1.0
 rich==13.3.5
+imgui[glfw]==2.0.0
+xxhash==3.2.0
+pygame==2.4.0

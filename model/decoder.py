@@ -4,8 +4,8 @@ from torch.nn import functional as F
 
 from typing import List, Tuple, Type
 
-from segment_anything.modeling.common import LayerNorm2d
-from segment_anything.modeling.mask_decoder import MaskDecoder
+from third_party.segment_anything.modeling.common import LayerNorm2d
+from third_party.segment_anything.modeling.mask_decoder import MaskDecoder
 
 
 class MaskLabelDecoder(MaskDecoder):

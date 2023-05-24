@@ -6,7 +6,7 @@ import torch
 
 from torchvision.ops.focal_loss import sigmoid_focal_loss
 from torchmetrics.classification import BinaryJaccardIndex
-from segment_anything.build_sam import build_sam_vit_h
+from third_party.segment_anything.build_sam import build_sam_vit_h
 from model.sam import build_sam_with_label_vit_h
 from model.sam import SamWithLabel
 import torch.optim as optim

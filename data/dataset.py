@@ -140,6 +140,17 @@ class Dataset2D(data.Dataset):
             return ret
     
 def get_data_loader(file_key, transform_key, batch_size, shuffle, device=device, first_only=False):
+    '''
+    A helper function to get a DataLoader
+
+    Args:
+        file_key: The key of the file to load, should be one of "training" and "validation"
+        transform_key: The key of the transform to apply, should be one of "naive_to_rgb_and_normalize" and "naive_to_rgb"
+        batch_size: The batch size
+        shuffle: Whether to shuffle the data
+        device: The device to load the data to
+        first_only: Whether to load only the first file
+    '''
     assert file_key in data_files.keys(), "Invalid file key!"
     assert transform_key in transforms.keys(), "Invalid transform key!"
     loader = ThreadDataLoader(Dataset2D(data_files[file_key], 
