@@ -6,7 +6,7 @@ def evaluate(predicter, data_iter):
     dice_val = 0.00
     num = 0
 
-    lst = 1800
+    lst = 99
 
     for batch in data_iter:
         lst -= 1

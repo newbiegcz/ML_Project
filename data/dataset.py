@@ -152,7 +152,7 @@ def get_data_loader(file_key, transform_key, batch_size, shuffle, device=device,
 
 if __name__ == "__main__":
     import rich, cv2
-    it = get_data_loader("training", "naive_to_rgb", batch_size=1, shuffle=False)
+    it = get_data_loader("training", "naive_to_rgb", batch_size=1, shuffle=False, device = 'cpu', first_only=True)
     res_w = 0
     res_h = 0
     for d in it:
@@ -169,4 +169,4 @@ if __name__ == "__main__":
             v = d['image'][0].clone()
             v[0] = d['label'][0][0] / 14 + d['image'][0][0]
             cv2.imshow("qwq", v.cpu().numpy().transpose(1, 2, 0))
-            cv2.waitKey(10)
+            cv2.waitKey(100)
