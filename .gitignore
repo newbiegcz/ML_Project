@@ -192,4 +192,5 @@ Temporary Items
 /checkpoint/
 /lightning_logs/
 /wandb/
+/embedding_cache/
 imgui.ini

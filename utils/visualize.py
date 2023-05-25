@@ -199,7 +199,20 @@ def main_loop():
             if current_object.data_type == "2D":
                 pre_display_func_2d(current_object.data['image'], current_object.data['pd_label'], current_object.data['gt_label'], current_object.data['prompt_points'], current_object.data['label_name'], current_object.data['background_label'])
             elif current_object.data_type == "3D":
-                pre_display_func_2d(current_object.data['image'][display_settings.current_height], current_object.data['pd_label'][display_settings.current_height], current_object.data['gt_label'][display_settings.current_height], current_object.data['prompt_points'][display_settings.current_height], current_object.data['label_name'], current_object.data['background_label'])
+                image = current_object.data['image'][display_settings.current_height]
+                if current_object.data['pd_label'] is not None:
+                    pd_label = current_object.data['pd_label'][display_settings.current_height]
+                else:
+                    pd_label = None
+                if current_object.data['gt_label'] is not None:
+                    gt_label = current_object.data['gt_label'][display_settings.current_height]
+                else:
+                    gt_label = None
+                if current_object.data['prompt_points'] is not None:
+                    prompt_points = current_object.data['prompt_points'][display_settings.current_height]
+                else:
+                    prompt_points = None
+                pre_display_func_2d(image, pd_label, gt_label, prompt_points, current_object.data['label_name'], current_object.data['background_label'])
             else:
                 raise Exception("Unknown data type")
 
@@ -388,9 +401,6 @@ def add_object(name, data_type, image, pd_label=None, gt_label=None, prompt_poin
         >>>                         gt_label=gt_label,
         >>>                         prompt_points=prompt_points,
         >>>                         label_name=visualize.default_label_names)
-
-
-
     """
     global objects
     image = to_numpy(image).copy()

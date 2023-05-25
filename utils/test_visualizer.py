@@ -22,3 +22,17 @@ visualize.add_object("test3D", "3D",
                     gt_label=gt_label,
                     prompt_points=prompt_points,
                     label_name=visualize.default_label_names)
+
+from data.dataset_old import *
+
+val_dataloader = get_loader("validation", eval_transforms, shuffle=False)
+
+i = 0
+for d in val_dataloader:
+    i += 1
+    visualize.add_object("dataset%d" % i, "3D",
+                    image=d['image'][0],
+                    pd_label=d['label'][0],
+                    gt_label=d['label'][0],
+                    prompt_points=None,
+                    label_name=visualize.default_label_names)

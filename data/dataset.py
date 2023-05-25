@@ -139,7 +139,7 @@ class Dataset2D(data.Dataset):
         else:
             return ret
     
-def get_data_loader(file_key, transform_key, batch_size, shuffle, device=device, first_only=False):
+def get_dataloader_2d(file_key, transform_key, batch_size, shuffle, device=device, first_only=False):
     '''
     A helper function to get a DataLoader
 
@@ -163,7 +163,7 @@ def get_data_loader(file_key, transform_key, batch_size, shuffle, device=device,
 
 if __name__ == "__main__":
     import rich, cv2
-    it = get_data_loader("training", "naive_to_rgb", batch_size=1, shuffle=False)
+    it = get_dataloader_2d("training", "naive_to_rgb", batch_size=1, shuffle=False)
     res_w = 0
     res_h = 0
     for d in it:
