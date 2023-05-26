@@ -7,13 +7,12 @@ import torch
 from torchvision.ops.focal_loss import sigmoid_focal_loss
 from torchmetrics.classification import BinaryJaccardIndex
 from third_party.segment_anything.build_sam import build_sam_vit_h
-from model.sam import build_sam_with_label_vit_h
+from model.build_sam import build_sam_with_label_vit_h
 from model.sam import SamWithLabel
 import torch.optim as optim
 import torch.nn as nn
 
-from data.dataset import get_data_loader
-import random
+from data.dataset import get_dataloader_2d
 
 # TODO: 优化 optimizer 的内存 (parameters & 更好的优化器)
 # TODO: Dice loss 与 Focal loss 的调参
@@ -250,36 +249,40 @@ class SAMWithLabelModule(pl.LightningModule):
             optimizer = optim.AdamW(self.parameters(), **optimizer_kwargs)
         return optimizer
     
-def get_sam_with_label(pretrained_checkpoint):
+def get_sam_with_label(pretrained_checkpoint, build_encoder=True):
     org_sam = build_sam_vit_h(pretrained_checkpoint)
     org_state_dict = org_sam.state_dict()
-    sam_with_label = build_sam_with_label_vit_h(None)
+    sam_with_label, encoder_builder = build_sam_with_label_vit_h(None, build_encoder=build_encoder)
     new_state_dict = sam_with_label.state_dict()
     for k, v in org_state_dict.items():
+        if not build_encoder and k.startswith("image_encoder"): 
+            continue  # sam_with_label has no image_encoder when build_encoder=False.
         assert k in new_state_dict.keys()
         new_state_dict[k] = v
     sam_with_label.load_state_dict(new_state_dict)
-    return sam_with_label
+    return sam_with_label, encoder_builder
 
-if cpu_only:
-    print("[Warn] 当前训练没有使用 GPU")
-    input("Type anything to continue...")
+if __name__ == "__main__":
+    if cpu_only:
+        print("[Warn] 当前训练没有使用 GPU")
+        input("Type anything to continue...")
 
-checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
+    checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
 
-sam_module = SAMWithLabelModule(get_sam_with_label(checkpoint_path))
+    sam_with_label, encoder_builder = get_sam_with_label(checkpoint_path, False)
+    sam_module = SAMWithLabelModule(sam_with_label)
 
-# first_only 用于 debug，记得改回来
-train_dataloader = get_data_loader("training", "naive_to_rgb_and_normalize", batch_size, True, device=data_device, first_only=False)
-val_dataloader = get_data_loader("validation", "naive_to_rgb_and_normalize", batch_size, False, device=data_device, first_only=False)
+    # first_only 用于 debug，记得改回来
+    train_dataloader = get_dataloader_2d("training", "naive_to_rgb_and_normalize", batch_size, True, device=data_device, first_only=False)
+    val_dataloader = get_dataloader_2d("validation", "naive_to_rgb_and_normalize", batch_size, False, device=data_device, first_only=False)
 
-wandb_logger = WandbLogger(name="task3_debug",
-                           project="SAM with Labels",
-                           entity='ml-project-2023',
-                           dir="./wandb")
-trainer = pl.Trainer(max_epochs=max_epochs, 
-                     profiler="advanced", 
-                     accelerator="cpu" if cpu_only else "auto",
-                     logger=wandb_logger,
-                     log_every_n_steps=10)
-trainer.fit(model=sam_module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+    wandb_logger = WandbLogger(name="task3_debug",
+                            project="SAM with Labels",
+                            entity='ml-project-2023',
+                            dir="./wandb")
+    trainer = pl.Trainer(max_epochs=max_epochs, 
+                        profiler="advanced", 
+                        accelerator="cpu" if cpu_only else "auto",
+                        logger=wandb_logger,
+                        log_every_n_steps=20)
+    trainer.fit(model=sam_module, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)

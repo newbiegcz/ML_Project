@@ -1,5 +1,6 @@
 import torch
 import torchvision
+import numpy as np
 from monai.data import (
     load_decathlon_datalist,
     set_track_meta,
@@ -92,7 +93,7 @@ transforms = {
 }
 
 class Dataset2D(data.Dataset):
-    def __init__(self, files, *, device, transform, first_only=False):
+    def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False):
         if first_only:
             files = files.copy()[:1]
 
@@ -102,11 +103,11 @@ class Dataset2D(data.Dataset):
         set_track_meta(True)
         _default_transform = Compose(
             [
-                LoadImaged(keys=["image", "label"], ensure_channel_first=True),
-                ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True),
-                CropForegroundd(keys=["image", "label"], source_key="image"),
+                LoadImaged(keys=["image", "label"], ensure_channel_first=True, dtype=dtype),
+                ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True, dtype=dtype),
+                CropForegroundd(keys=["image", "label"], source_key="image", dtype=dtype),
                 Orientationd(keys=["image", "label"], axcodes="RAS"),
-                EnsureTyped(keys=["image", "label"], device=self.device, track_meta=False),
+                EnsureTyped(keys=["image", "label"], device=self.device, track_meta=False, dtype=dtype),
             ]
         )
         
