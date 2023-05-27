@@ -165,7 +165,7 @@ def pre_display_func_2d(image, pd_label, gt_label, prompt_points, label_name, ba
         if display_settings.show_prompt:
             if prompt_points is not None:
                 for point, t in prompt_points:
-                    point = (int(point[1]), int(point[0])) # OpenCV: (y, x)????
+                    point = (int(point[0]), int(point[1]))
                     color = (0, 0, 1.0) if t else (1.0, 0, 0) # OpenCV: BGR
                     image = cv2.circle(image.copy(), point, 10, color, -1)
 
@@ -396,7 +396,7 @@ def add_object(name, data_type, image, pd_label=None, gt_label=None, prompt_poin
         image (torch.Tensor or np.ndarray): 二维或三维图像. Channel 应该在第一维.
         pd_label (torch.Tensor or np.ndarray, optional): 预测标签. 默认为 None.
         gt_label (torch.Tensor or np.ndarray, optional): 真实标签. 默认为 None.
-        prompt_points (list, optional): prompt 点的列表. 对于三维数据，该列表是每个切片的二维 Prompt 的列表. 对于一个二维切片，其 prompt 列表中每一项的格式为 ((x, y), label). label 为 1 或 0. 默认为 None.
+        prompt_points (list, optional): prompt 点的列表. 对于三维数据，该列表是每个切片的二维 Prompt 的列表. 对于一个二维切片，其 prompt 列表中每一项的格式为 ((x, y), label). label 为 1 或 0. 默认为 None. 注意: prompt 所使用的坐标系与 sam 和 cv2 所用的坐标系相同，与数组的下标索引相反。
         label_name (list, optional): 标签名称列表. 使用原数据集的标签时，可以传入 visualize.default_label_names. 默认为 None.
         background_label (int, optional): 计算 Dice 时忽略的背景标签. 默认为 0.
         extras (dict, optional): 附加信息. 默认为 None. 二维时是一个 Dict. 三维时可以是一个 Dict 构成的列表，每个 Dict 对应一个切片.

@@ -155,10 +155,11 @@ class Producer:
                 prompts.append(prompt)
         prompts = torch.cat(prompts, dim=0)
         prompts = prompts[torch.randperm(len(prompts), generator=self.normal_rng)]
+        mask_cls = label[0, prompts[:, 0], prompts[:, 1]]
         if image is None:
-            return [embedding, label, prompts, self.current_step]
+            return [embedding, label, prompts, mask_cls, self.current_step]
         else :
-            return [embedding, label, prompts, self.current_step, image]
+            return [embedding, label, prompts, mask_cls, image, self.current_step]
 
     def gen_image(self):
         image_seed = torch.randint(1000000, (1,), generator=self.seed_rng).item()
@@ -169,7 +170,8 @@ class Producer:
         
     def process_buffer(self):
         images = torch.stack(self.buffer_images).to(self.encoder_device)
-        with torch.no_grad():
+        print(self.encoder_device, "started", images.shape)
+        with torch.inference_mode():
             _images = images.to(self.encoder_device).to(torch.float32)
             embeddings = self.encoder(_images)
         embeddings = embeddings.cpu()
@@ -185,6 +187,7 @@ class Producer:
         self.buffer_images = []
         self.buffer_image_keys = []
         self.buffer_labels = []
+        print("end")
 
     def produce(self):
         if not self.initialized:
@@ -254,8 +257,8 @@ class Producer:
             self.buffer_labels = []
         while True:
             self.current_step += 1
-            if len(self.available_datapoint_sets) == 0 or self.available_datapoint_sets[0][3] > self.current_step:
-                while len(self.buffer_images) < self.encoder_batch_size and (len(self.available_datapoint_sets) < self.chunk_size or self.available_datapoint_sets[0][3] > self.current_step):
+            if len(self.available_datapoint_sets) == 0 or self.available_datapoint_sets[0][-1] > self.current_step:
+                while len(self.buffer_images) < self.encoder_batch_size and (len(self.available_datapoint_sets) < self.chunk_size or self.available_datapoint_sets[0][-1] > self.current_step):
                     d = self.gen_image()
                     image = d['image']
                     label = d['label']
@@ -277,20 +280,23 @@ class Producer:
                 if len(self.buffer_images) >= self.encoder_batch_size:
                     self.process_buffer()
 
-            assert self.available_datapoint_sets[0][3] <= self.current_step
+            assert self.available_datapoint_sets[0][-1] <= self.current_step
 
             datapoint_set = self.available_datapoint_sets.popleft()
             datapoint = {
                 "embedding": datapoint_set[0],
                 "label": datapoint_set[1],
                 "prompt": datapoint_set[2][-1],
+                "mask_cls": datapoint_set[3][-1],
             }
+            datapoint['prompt'] = datapoint['prompt'][[1, 0]] # to make it compatible with the model
             if self.debug:
                 datapoint['image'] = (datapoint_set[4]  * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean)
                 # print (datapoint['image'])
             self.queue.put(datapoint)
-            datapoint_set[3] += self.delay
+            datapoint_set[-1] += self.delay
             datapoint_set[2] = datapoint_set[2][:-1]
+            datapoint_set[3] = datapoint_set[3][:-1]
             if len(datapoint_set[2]) > 0:
                 self.available_datapoint_sets.append(datapoint_set)
 
@@ -389,7 +395,20 @@ class ExpDataset(Dataset):
         return state
 
 def main():
-    from sam_with_label import get_sam_with_label
+    from modeling.build_sam import build_sam_with_label_vit_h
+    from third_party.segment_anything.build_sam import build_sam_vit_h
+    def get_sam_with_label(pretrained_checkpoint, build_encoder=True):
+        org_sam = build_sam_vit_h(pretrained_checkpoint)
+        org_state_dict = org_sam.state_dict()
+        sam_with_label, encoder_builder = build_sam_with_label_vit_h(None, build_encoder=build_encoder)
+        new_state_dict = sam_with_label.state_dict()
+        for k, v in org_state_dict.items():
+            if not build_encoder and k.startswith("image_encoder"): 
+                continue  # sam_with_label has no image_encoder when build_encoder=False.
+            assert k in new_state_dict.keys()
+            new_state_dict[k] = v
+        sam_with_label.load_state_dict(new_state_dict)
+        return sam_with_label, encoder_builder
     checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
     sam, encoder_builder = get_sam_with_label(checkpoint_path, False)
     from data.dataset import data_files
@@ -423,6 +442,9 @@ def main():
         prompt_point = data['prompt'][0]
         prompt = [(prompt_point, 0)]
         dummy_image = torch.zeros((3, 1024, 1024))
+        cls = data['label'][0][0][prompt_point[1]][prompt_point[0]]
+        assert(cls == data['mask_cls'])
+        cls = cls.to(torch.int32)
         viz.add_object_2d("image" + str(i),
                           image=data['image'][0].numpy(),
                           pd_label=None,
@@ -431,7 +453,7 @@ def main():
                           label_name=viz.default_label_names,
                              extras={
                               "prompt": prompt_point,
-                              "prompt_label": viz.default_label_names[data['label'][0][0][prompt_point[0]][prompt_point[1]].to(torch.int32)]
+                              "prompt_label": viz.default_label_names[cls]
                           }
         )
 

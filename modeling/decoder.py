@@ -79,7 +79,7 @@ class MaskLabelDecoder(MaskDecoder):
         else :
             src = image_embeddings
             src = src + dense_prompt_embeddings
-            pos_src = image_pe
+            pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0) # TODO: 可优化吗?
         
         b, c, h, w = src.shape
 
