@@ -127,8 +127,25 @@ def neq_np_dict(x, y):
         if not isinstance(y, np.ndarray):
             return True
         return not (x == y).all()
+    elif isinstance(x, (list, tuple)):
+        if not isinstance(y, (list, tuple)):
+            return True
+        if len(x) != len(y):
+            return True
+        for i in range(len(x)):
+            if neq_np_dict(x[i], y[i]):
+                return True
+        return False
+    elif isinstance(x, torch.Tensor) or isinstance(y, torch.Tensor):
+        if not isinstance(y, torch.Tensor):
+            return True
+        return not (x == y).all()
     else:
-        return x != y
+        try:
+            return x != y
+        except:
+            print(type(x), type(y))
+
 
 def pre_display_func_2d(image, pd_label, gt_label, prompt_points, label_name, background_label):
     global last_args_dict
@@ -148,6 +165,7 @@ def pre_display_func_2d(image, pd_label, gt_label, prompt_points, label_name, ba
         if display_settings.show_prompt:
             if prompt_points is not None:
                 for point, t in prompt_points:
+                    point = (int(point[1]), int(point[0])) # OpenCV: (y, x)????
                     color = (0, 0, 1.0) if t else (1.0, 0, 0) # OpenCV: BGR
                     image = cv2.circle(image.copy(), point, 10, color, -1)
 
@@ -199,7 +217,20 @@ def main_loop():
             if current_object.data_type == "2D":
                 pre_display_func_2d(current_object.data['image'], current_object.data['pd_label'], current_object.data['gt_label'], current_object.data['prompt_points'], current_object.data['label_name'], current_object.data['background_label'])
             elif current_object.data_type == "3D":
-                pre_display_func_2d(current_object.data['image'][display_settings.current_height], current_object.data['pd_label'][display_settings.current_height], current_object.data['gt_label'][display_settings.current_height], current_object.data['prompt_points'][display_settings.current_height], current_object.data['label_name'], current_object.data['background_label'])
+                image = current_object.data['image'][display_settings.current_height]
+                if current_object.data['pd_label'] is not None:
+                    pd_label = current_object.data['pd_label'][display_settings.current_height]
+                else:
+                    pd_label = None
+                if current_object.data['gt_label'] is not None:
+                    gt_label = current_object.data['gt_label'][display_settings.current_height]
+                else:
+                    gt_label = None
+                if current_object.data['prompt_points'] is not None:
+                    prompt_points = current_object.data['prompt_points'][display_settings.current_height]
+                else:
+                    prompt_points = None
+                pre_display_func_2d(image, pd_label, gt_label, prompt_points, current_object.data['label_name'], current_object.data['background_label'])
             else:
                 raise Exception("Unknown data type")
 
@@ -219,14 +250,25 @@ def main_loop():
                     imgui.text("No object has been selected.")
                 else :
                     imgui.text("Current Object: %s (%s)" % (current_object.name, current_object.data_type))
+
+                    extra_dict = None
+                    
                     if current_object.data_type == "2D":
-                        pass
+                        extra_dict = current_object.data['extras']
                     elif current_object.data_type == "3D":
                         # add a slider to select the height
                         changed, display_settings.current_height = imgui.slider_int("Height", display_settings.current_height, 0, current_object.data['image'].shape[0] - 1)
+                        extra_dict = current_object.data['extras']
+                        if extra_dict is not None:
+                            extra_dict = extra_dict[display_settings.current_height]
                     else:
                         raise Exception("Unknown data type")
                     
+                    if extra_dict is not None:
+                        imgui.text("Extra Info:")
+                        for key, value in extra_dict.items():
+                            imgui.text("%s: %s" % (key, value))
+                
                     clicked, _ = imgui.checkbox("Show Prompt", display_settings.show_prompt)
                     if clicked:
                         display_settings.show_prompt = not display_settings.show_prompt
@@ -344,7 +386,7 @@ def to_numpy(x):
     else:
         raise Exception("Unknown type")
 
-def add_object(name, data_type, image, pd_label=None, gt_label=None, prompt_points=None, label_name=None, background_label=0):
+def add_object(name, data_type, image, pd_label=None, gt_label=None, prompt_points=None, label_name=None, background_label=0, extras=None):
     """
     添加一个对象到可视化窗口中
 
@@ -357,6 +399,7 @@ def add_object(name, data_type, image, pd_label=None, gt_label=None, prompt_poin
         prompt_points (list, optional): prompt 点的列表. 对于三维数据，该列表是每个切片的二维 Prompt 的列表. 对于一个二维切片，其 prompt 列表中每一项的格式为 ((x, y), label). label 为 1 或 0. 默认为 None.
         label_name (list, optional): 标签名称列表. 使用原数据集的标签时，可以传入 visualize.default_label_names. 默认为 None.
         background_label (int, optional): 计算 Dice 时忽略的背景标签. 默认为 0.
+        extras (dict, optional): 附加信息. 默认为 None. 二维时是一个 Dict. 三维时可以是一个 Dict 构成的列表，每个 Dict 对应一个切片.
 
     Example:
         2D 数据
@@ -388,9 +431,6 @@ def add_object(name, data_type, image, pd_label=None, gt_label=None, prompt_poin
         >>>                         gt_label=gt_label,
         >>>                         prompt_points=prompt_points,
         >>>                         label_name=visualize.default_label_names)
-
-
-
     """
     global objects
     image = to_numpy(image).copy()
@@ -411,10 +451,6 @@ def add_object(name, data_type, image, pd_label=None, gt_label=None, prompt_poin
             gt_label = gt_label[0]
         if data_type == "3D" and len(gt_label.shape) == 4:
             gt_label = gt_label[0]
-        
-
-    if prompt_points is not None:
-        prompt_points = prompt_points.copy()
 
     if not pd_label is None:
         if pd_label.dtype != np.int32:
@@ -439,19 +475,20 @@ def add_object(name, data_type, image, pd_label=None, gt_label=None, prompt_poin
             'gt_label': gt_label,
             'prompt_points': prompt_points,
             'label_name': label_name,
-            'background_label': background_label
+            'background_label': background_label,
+            'extras': extras
         }
     ))
 
-def add_object_2d(name, *, image, pd_label=None, gt_label=None, prompt_points=None, label_name=None, background_label=0):
-    add_object(name, "2D", image, pd_label, gt_label, prompt_points, label_name, background_label)
+def add_object_2d(name, *, image, pd_label=None, gt_label=None, prompt_points=None, label_name=None, background_label=0, extras=None):
+    add_object(name, "2D", image, pd_label, gt_label, prompt_points, label_name, background_label, extras)
 
-def add_object_3d(name, *, image, pd_label=None, gt_label=None, prompt_points=None, label_name=None, background_label=0):
-    add_object(name, "3D", image, pd_label, gt_label, prompt_points, label_name, background_label)
+def add_object_3d(name, *, image, pd_label=None, gt_label=None, prompt_points=None, label_name=None, background_label=0, extras=None):
+    add_object(name, "3D", image, pd_label, gt_label, prompt_points, label_name, background_label, extras)
 
 if __name__=="__main__":
     initialize_window()
-    loader = dataset.get_data_loader("training", "naive_to_rgb", batch_size=1, shuffle=False, device="cpu", first_only=True)
+    loader = dataset.get_dataloader_2d("training", "naive_to_rgb", batch_size=1, shuffle=False, device="cpu", first_only=True)
     for data in loader:
         if (data['label'][0] != 0).sum() <= 1000:
             continue
