@@ -21,6 +21,7 @@ from lightning.pytorch.loggers.wandb import WandbLogger
 class MyLightningCLI(LightningCLI):
     def add_arguments_to_parser(self, parser):
         parser.link_arguments("model.model_type", "data.model_type")
+        parser.link_arguments("model.debug", "data.debug")
 
 class MyTrainer(Trainer):
     def __init__(self, **kwargs):
@@ -28,7 +29,7 @@ class MyTrainer(Trainer):
             name= "debug",
             project= "SAM with Labels",
             entity= "ml-project-2023",
-            save_dir= "./experiment_logs/wandb",
+            save_dir= "experiment_logs",
         )
         super().__init__(logger=logger, **kwargs)
 
@@ -37,7 +38,8 @@ def cli_main():
         trainer_class=MyTrainer,
         parser_kwargs={
             "default_config_files": ["training/sam_with_label/config.yaml"],   
-        })
+        },
+        save_config_callback=None)
 
 if __name__ == "__main__":
     cli_main()

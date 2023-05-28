@@ -7,6 +7,13 @@ import torch.optim as optim
 import torch.nn as nn
 from losses import SegmentationLoss
 from utils.visualize import default_label_names
+import utils.visualize as visualize
+
+pretrained_checkpoints = {
+    "vit_h": "checkpoint/sam_vit_h_4b8939.pth",
+    "vit_l": "checkpoint\sam_vit_l_0b3195.pth",
+    "vit_b": "checkpoint\sam_vit_b_01ec64.pth",
+}
 
 class DiceMetric():
     def __init__(self):
@@ -53,7 +60,6 @@ def iou_func(pred_binary_mask, binary_label):
 class SAMWithLabelModule(pl.LightningModule):
     def __init__(self, 
                  model_type: str = "vit_h",
-                 pretrained_checkpoint: str = "checkpoint/sam_vit_h_4b8939.pth",
                  train_image_encoder: bool = False,
                  train_prompt_encoder: bool = True,
                  dice_loss_coef: float = 1.0,
@@ -72,11 +78,11 @@ class SAMWithLabelModule(pl.LightningModule):
                  focal_loss_params: dict = {
                      "alpha": 0.25,
                      "gamma": 2.0,
-                },):
+                 },
+                 debug: bool = False):
         '''
         Args:
             model_type: str, model type, one of ["vit_h", "vit_b", "vit_tiny", "vit_small", "vit_base"]
-            pretrained_checkpoint: str, path to pretrained checkpoint
             train_image_encoder: bool, whether to train image encoder
             train_prompt_encoder: bool, whether to train prompt encoder
             dice_loss_coef: float, dice loss coefficient
@@ -90,8 +96,8 @@ class SAMWithLabelModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
+        self.pretrained_checkpoint = pretrained_checkpoints[model_type]
         self.model_type = model_type
-        self.pretrained_checkpoint = pretrained_checkpoint
         self.train_image_encoder = train_image_encoder
         self.train_prompt_encoder = train_prompt_encoder
         self.dice_loss_coef = dice_loss_coef
@@ -100,9 +106,10 @@ class SAMWithLabelModule(pl.LightningModule):
         self.iou_loss_coef = iou_loss_coef
         self.optimizer_type = optimizer_type
         self.optimizer_kwargs = optimizer_kwargs
+        self.debug = debug
         
         self.model, self.encoder_builder  = sam_with_label_model_registry[model_type](None, train_image_encoder)
-        pretrained_sam = sam_model_registry[model_type](pretrained_checkpoint)
+        pretrained_sam = sam_model_registry[model_type](self.pretrained_checkpoint)
         pretrained_state_dict = pretrained_sam.state_dict()
         new_state_dict = self.model.state_dict()
         for k, v in pretrained_state_dict.items():
@@ -122,6 +129,9 @@ class SAMWithLabelModule(pl.LightningModule):
         self.cross_entropy_loss = nn.CrossEntropyLoss().to(self.device)
         self.training_dice_metric = DiceMetric()
         self.validation_dice_metric = DiceMetric()
+
+        if self.debug:
+            visualize.initialize_window()
 
     def get_logits(self, batch):
         # 未来如果实现训练 encoder，一定要记得判断 torch.is_grad_enabled()，避免 validate 时保留梯度
@@ -153,9 +163,12 @@ class SAMWithLabelModule(pl.LightningModule):
         batch_mask = batch_masks[:, 0]
         batch_iou = batch_ious[:, 0]
 
+        print("batch_masksss.shape:", batch_masks.shape)
+        print("batch_ioussss.shape", batch_ious.shape)
+
         return batch_mask, batch_iou, batch_label
     
-    def get_loss_and_update_metric(self, batch, batch_mask, batch_iou, batch_label, metric):
+    def get_loss_and_update_metric(self, batch, batch_mask, batch_iou, batch_label, metric, batch_name):
         B = len(batch['embedding'])
 
         segmentation_loss = 0.0
@@ -171,10 +184,14 @@ class SAMWithLabelModule(pl.LightningModule):
             mode="nearest-exact"
         )
         binary_label = (lowres_labels[:, 0] == mask_cls[:, None, None]).to(torch.float)
-        segmentation_loss = self.segmentation_loss(batch_mask, binary_label)
+        segmentation_loss, _dice_loss, _focal_loss = self.segmentation_loss(batch_mask, binary_label)
+
+        print("binary_label.shape: ", binary_label.shape)
+    
 
         with torch.no_grad():
             pred_binary_mask = (batch_mask > self.model.mask_threshold).to(torch.long)
+            print("pred_binary_mask.shape: ", pred_binary_mask.shape)
             binary_label = binary_label.to(torch.long)
             iou = iou_func(pred_binary_mask, binary_label)
             assert (iou.shape[0] == B)
@@ -191,25 +208,59 @@ class SAMWithLabelModule(pl.LightningModule):
         iou_loss = ((iou - batch_iou) ** 2).mean()
         label_loss = self.cross_entropy_loss(batch_label, label_density)
 
-        return segmentation_loss, iou_loss, label_loss
+        if  self.debug:
+            if batch_name is None:
+                batch_name = "unnamed"
+
+            pd_output_label = torch.nn.functional.interpolate(
+                pred_binary_mask[0:1, None, :, :].to(torch.float32),
+                (1024, 1024),
+                mode="nearest-exact"
+            )[0].cpu().numpy()
+
+            gt_output_label = torch.nn.functional.interpolate(
+                binary_label[0:1, None, :, :].to(torch.float32),
+                (1024, 1024),
+                mode="nearest-exact"
+            )[0].cpu().numpy()
+
+            print ("mask_cls.shape", mask_cls.shape)
+
+            prompt = batch['prompt'][0].detach().cpu().numpy()
+            visualize.add_object_2d(batch_name + "_img0",
+                    image=batch['image'][0].detach().cpu().numpy(),
+                    pd_label=pd_output_label,
+                    gt_label=gt_output_label,
+                    label_name=["negative", "positive"],
+                        extras={
+                        "prompt": prompt,
+                        "prompt_label": default_label_names[mask_cls[0].cpu().to(torch.int)]
+                    }
+            )
+            input("")
+
+
+        return segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss
 
 
     def training_step(self, batch, batch_idx):
         batch_mask, batch_iou, batch_label = self.get_logits(batch)
 
-        segmentation_loss, iou_loss, label_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, batch_label, self.training_dice_metric)
+        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, batch_label, self.training_dice_metric, "train_%d" % batch_idx)
 
         loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
 
-        self.log("train/total_loss", loss)
-        self.log("train/label_loss", label_loss)
-        self.log("train/iou_loss", iou_loss)
-        self.log("train/segmentation_loss", segmentation_loss)
+        self.log("train_loss/total_loss", loss)
+        self.log("train_loss/label_loss", label_loss)
+        self.log("train_loss/iou_loss", iou_loss)
+        self.log("train_loss/segmentation_loss", segmentation_loss)
+        self.log("train_loss/dice_loss", _dice_loss)
+        self.log("train_loss/focal_loss", _focal_loss)
 
         mdice, avg_dice = self.training_dice_metric.get_metrics()
-        self.log("train/mDice", mdice)
+        self.log("train_Dice/mDice", mdice)
         for i in range(14):
-            self.log("train/%s" % default_label_names[i], avg_dice[i])
+            self.log("train_Dice/%s" % default_label_names[i], avg_dice[i])
         
         return loss
     
@@ -219,21 +270,23 @@ class SAMWithLabelModule(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         batch_mask, batch_iou, batch_label = self.get_logits(batch)
 
-        segmentation_loss, iou_loss, label_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, batch_label, self.validation_dice_metric)
+        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, batch_label, self.validation_dice_metric, "val_%d" % batch_idx)
 
         loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
 
-        self.log("val/total_loss", loss)
-        self.log("val/label_loss", label_loss)
-        self.log("val/iou_loss", iou_loss)
-        self.log("val/segmentation_loss", segmentation_loss)
+        self.log("val_loss/total_loss", loss)
+        self.log("val_loss/label_loss", label_loss)
+        self.log("val_loss/iou_loss", iou_loss)
+        self.log("val_loss/segmentation_loss", segmentation_loss)
+        self.log("val_loss/dice_loss", _dice_loss)
+        self.log("val_loss/focal_loss", _focal_loss)
         return loss
     
     def on_validation_epoch_end(self):
         mdice, avg_dice = self.validation_dice_metric.get_metrics()
-        self.log("val/mDice", mdice)
+        self.log("val_Dice/mDice", mdice)
         for i in range(14):
-            self.log("val/%s" % default_label_names[i], avg_dice[i])
+            self.log("val_Dice/%s" % default_label_names[i], avg_dice[i])
         self.validation_dice_metric.reset()
 
     def configure_optimizers(self):

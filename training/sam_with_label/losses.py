@@ -1,8 +1,6 @@
 import torch
 from torchvision.ops.focal_loss import sigmoid_focal_loss
 
-# TODO: 应当对不同类别分开计算 Dice Loss
-# 但这可能需要较大的 batch size 才能保证每个类别都有足够的样本
 class SoftDiceLoss():
     def __init__(self, p=1.0, smooth=1.0):
         super().__init__()
@@ -10,11 +8,13 @@ class SoftDiceLoss():
         self.smooth = smooth
 
     def __call__(self, logits, labels):
+        B = logits.shape[0]
         probs = torch.sigmoid(logits)
-        numer = (probs * labels).sum()
-        denor = (probs.pow(self.p) + labels.pow(self.p)).sum()
+        numer = (probs * labels).reshape(B, -1).sum(dim=1)
+        denor = (probs.pow(self.p) + labels.pow(self.p)).reshape(B, -1).sum(dim=1)
         loss = 1. - (2 * numer + self.smooth) / (denor + self.smooth)
-        return loss
+        assert loss.shape[0] == B
+        return loss.mean()
 
 class SegmentationLoss():
     def __init__(self, 
@@ -37,4 +37,5 @@ class SegmentationLoss():
 
     def __call__(self, logits, labels):
         focal_loss = sigmoid_focal_loss(logits, labels, reduction='mean', **self.focal_loss_params)
-        return self.dice_loss_coef * self.dice_loss(logits, labels) + self.focal_loss_coef * focal_loss
+        dice_loss = self.dice_loss(logits, labels)
+        return self.dice_loss_coef * dice_loss + self.focal_loss_coef * focal_loss, dice_loss, focal_loss

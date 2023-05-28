@@ -12,7 +12,7 @@ import albumentations.pytorch.transforms
 
 size_10gb = 10 * 1024 * 1024 * 1024 # 10 GB
 
-def get_image_key(image):
+def get_image_key(image, model_type):
     # assert image.dtype == torch.float64, "image must be float64"
 
     # downsample the image to avoid floating point errors
@@ -21,7 +21,8 @@ def get_image_key(image):
     # discretize the image into 256 bins
     image = (image * 255).to(torch.uint8)
 
-    return image.numpy().tobytes()
+    type_key = bytes(model_type + ":", 'utf-8')
+    return type_key + image.numpy().tobytes()
 
 all_cmaps = plt.colormaps()
 exclude = ['flag', 'prism', 'ocean', 'gist_earth', 'terrain',
@@ -169,12 +170,12 @@ class Producer:
             return self.transform_2d(self.raw_dataset[image_index], seed=image_seed+1)
         
     def process_buffer(self):
-        images = torch.stack(self.buffer_images).to(self.encoder_device)
-        print(self.encoder_device, "started", images.shape)
+        images = torch.stack(self.buffer_images)
+        if self.debug:
+            print(self.encoder_device, "started", images.shape)
         with torch.inference_mode():
             _images = images.to(self.encoder_device).to(torch.float32)
-            embeddings = self.encoder(_images)
-        embeddings = embeddings.cpu()
+            embeddings = self.encoder(_images).cpu()
 
         for i in range(len(embeddings)):
             embedding = embeddings[i]
@@ -187,7 +188,8 @@ class Producer:
         self.buffer_images = []
         self.buffer_image_keys = []
         self.buffer_labels = []
-        print("end")
+        if self.debug:
+            print("end")
 
     def produce(self):
         if not self.initialized:
@@ -262,7 +264,7 @@ class Producer:
                     d = self.gen_image()
                     image = d['image']
                     label = d['label']
-                    image_key = get_image_key(image)
+                    image_key = get_image_key(image, self.model_type)
                     if image_key in self.cache:
                         embedding = self.cache[image_key]
                         datapoint_set = self.gen_datapoint_set(embedding, label, image if self.debug else None)

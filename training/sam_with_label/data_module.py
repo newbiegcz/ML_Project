@@ -23,6 +23,7 @@ class DataModule(pl.LightningDataModule):
                  delay: int = 128,
                  augment_training_data: bool = True,
                  augment_validation_data: bool = True,
+                 debug: bool = False
                 ):
         super().__init__()
 
@@ -41,12 +42,17 @@ class DataModule(pl.LightningDataModule):
         self.delay = delay
         self.augment_training_data = augment_training_data
         self.augment_validation_data = augment_validation_data
+        self.debug = debug
 
-
+        data_files_training = data_files["training"]
+        data_files_validation = data_files["validation"]
+        if self.debug:
+            data_files_training = data_files_training[:1]
+            data_files_validation = data_files_validation[:1]
 
         # TODO: This will keep two copies of the encoder in memory. We should find a way to avoid this.
         self.training_dataset = ExpDataset(
-                data_files=data_files["training"],
+                data_files=data_files_training,
                 epoch_len=self.training_epoch_len,
                 chunk_size=self.chunk_size,
                 encoder_builder=self.encoder_builder,
@@ -58,10 +64,11 @@ class DataModule(pl.LightningDataModule):
                 seed=self.seed,
                 delay=self.delay,
                 augment_data=self.augment_training_data,
+                debug=self.debug
             )
     
         self.validation_dataset = ExpDataset(
-            data_files=data_files["validation"],
+            data_files=data_files_validation,
             epoch_len=self.validation_epoch_len,
             chunk_size=self.chunk_size,
             encoder_builder=self.encoder_builder,
@@ -73,6 +80,7 @@ class DataModule(pl.LightningDataModule):
             seed=self.seed,
             delay=self.delay,
             augment_data=self.augment_validation_data,
+            debug=self.debug
         )
         
 

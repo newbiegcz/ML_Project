@@ -30,8 +30,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
   model:
-    model_type: vit_h
-    pretrained_checkpoint: checkpoint/sam_vit_h_4b8939.pth
+    model_type: vit_b
     train_image_encoder: false
     train_prompt_encoder: true
     dice_loss_coef: 0.05
@@ -48,13 +47,14 @@ fit:
     focal_loss_params:
       alpha: 0.25
       gamma: 2
+    debug: true
   data:
     training_epoch_len: 20000
     validation_epoch_len: 2000
-    chunk_size: 64
-    batch_size: 64
-    delay: 512
-    encoder_batch_size: 2
+    chunk_size: 2
+    batch_size: 2
+    delay: 5
+    encoder_batch_size: 1
     encoder_device: 'cuda:0'
     cache_path: embedding_cache
     cache_size_limit: 10737418240
