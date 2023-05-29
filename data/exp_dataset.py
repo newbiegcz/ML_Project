@@ -12,6 +12,7 @@ import albumentations.pytorch.transforms
 from data.dataset import PreprocessForModel
 from data.dataset import DictTransform
 from modeling.build_sam import build_pretrained_encoder
+import rich
 
 size_10gb = 10 * 1024 * 1024 * 1024 # 10 GB
 
@@ -309,6 +310,7 @@ class Producer:
                 # print ("normalized pixel max, min:", torch.max(datapoint_set[4]), torch.min(datapoint_set[4]))
                 datapoint['image'] = (datapoint_set[4]  * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean)
                 # print (datapoint['image'])
+            
             self.queue.put(datapoint)
             datapoint_set[-1] += self.delay
             datapoint_set[2] = datapoint_set[2][:-1]

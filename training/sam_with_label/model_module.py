@@ -186,8 +186,10 @@ class SAMWithLabelModule(pl.LightningModule):
             mode="nearest-exact"
         )
         binary_label = (lowres_labels[:, 0] == mask_cls[:, None, None]).to(torch.float)
-        segmentation_loss, _dice_loss, _focal_loss = self.segmentation_loss(batch_mask, binary_label)
-    
+        
+        is_foreground_label = mask_cls != 0
+        segmentation_loss, _dice_loss, _focal_loss = self.segmentation_loss(batch_mask[is_foreground_label], binary_label[is_foreground_label])
+        
 
         with torch.no_grad():
             pred_binary_mask = (batch_mask > self.model.mask_threshold).to(torch.long)

@@ -36,6 +36,9 @@ class SegmentationLoss():
         self.dice_loss = SoftDiceLoss(**self.dice_loss_params)
 
     def __call__(self, logits, labels):
+        B = logits.shape[0]
+        if B == 0:
+            return 0.0, 0.0, 0.0
         focal_loss = sigmoid_focal_loss(logits, labels, reduction='mean', **self.focal_loss_params)
         dice_loss = self.dice_loss(logits, labels)
         return self.dice_loss_coef * dice_loss + self.focal_loss_coef * focal_loss, dice_loss, focal_loss

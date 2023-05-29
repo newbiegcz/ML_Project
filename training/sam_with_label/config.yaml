@@ -20,7 +20,7 @@ fit:
     max_epochs: 20
     overfit_batches: 0
     check_val_every_n_epoch: 1
-    log_every_n_steps: 2
+    log_every_n_steps: 10
     accumulate_grad_batches: 1
     benchmark: null
     use_distributed_sampler: true
@@ -30,7 +30,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-      name: no label loss
+      name: with label loss
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -40,11 +40,11 @@ fit:
     train_prompt_encoder: true
     dice_loss_coef: 0.05
     focal_loss_coef: 1
-    label_loss_coef: 0.0
-    iou_loss_coef: 1
+    label_loss_coef: 0.3
+    iou_loss_coef: 0.5
     optimizer_type: AdamW
     optimizer_kwargs:
-      lr: 0.0001
+      lr: 0.00001
       weight_decay: 0.1
     dice_loss_params:
       p: 1
@@ -55,10 +55,10 @@ fit:
     debug: false
   data:
     training_epoch_len: 20000
-    validation_epoch_len: 2000
-    chunk_size: 32
-    batch_size: 16
-    delay: 256
+    validation_epoch_len: 20000
+    chunk_size: 64
+    batch_size: 32
+    delay: 512
     encoder_batch_size: 1
     encoder_device: 'cuda:0'
     cache_path: embedding_cache
