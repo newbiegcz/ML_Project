@@ -48,8 +48,8 @@ class DictTransform:
         return x
     
 class PreprocessForModel:
-    pixel_mean=torch.Tensor([123.675, 116.28, 103.53]).view(-1, 1, 1)
-    pixel_std=torch.Tensor([58.395, 57.12, 57.375]).view(-1, 1, 1)
+    pixel_mean=(torch.Tensor([123.675, 116.28, 103.53]) / 255).view(-1, 1, 1)
+    pixel_std=(torch.Tensor([58.395, 57.12, 57.375]) / 255).view(-1, 1, 1)
     img_size=1024
 
     def __init__(self, normalize=False):

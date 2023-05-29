@@ -1,6 +1,5 @@
 import lightning.pytorch as pl
 from data.exp_dataset import ExpDataset
-from modeling.build_sam import sam_with_label_encoder_builders
 from data.dataset import data_files
 import torch
 from torch.utils.data import DataLoader
@@ -26,8 +25,6 @@ class DataModule(pl.LightningDataModule):
                  debug: bool = False
                 ):
         super().__init__()
-
-        self.encoder_builder = sam_with_label_encoder_builders[model_type]
 
         self.model_type = model_type
         self.training_epoch_len = training_epoch_len
@@ -55,7 +52,6 @@ class DataModule(pl.LightningDataModule):
                 data_files=data_files_training,
                 epoch_len=self.training_epoch_len,
                 chunk_size=self.chunk_size,
-                encoder_builder=self.encoder_builder,
                 encoder_device=self.encoder_device,
                 encoder_batch_size=self.encoder_batch_size,
                 model_type=self.model_type,
@@ -71,7 +67,6 @@ class DataModule(pl.LightningDataModule):
             data_files=data_files_validation,
             epoch_len=self.validation_epoch_len,
             chunk_size=self.chunk_size,
-            encoder_builder=self.encoder_builder,
             encoder_device=self.encoder_device,
             encoder_batch_size=self.encoder_batch_size,
             model_type=self.model_type,

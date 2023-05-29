@@ -8,12 +8,7 @@ import torch.nn as nn
 from losses import SegmentationLoss
 from utils.visualize import default_label_names
 import utils.visualize as visualize
-
-pretrained_checkpoints = {
-    "vit_h": "checkpoint/sam_vit_h_4b8939.pth",
-    "vit_l": "checkpoint\sam_vit_l_0b3195.pth",
-    "vit_b": "checkpoint\sam_vit_b_01ec64.pth",
-}
+from modeling.build_sam import pretrained_checkpoints
 
 class DiceMetric():
     def __init__(self):
@@ -137,6 +132,16 @@ class SAMWithLabelModule(pl.LightningModule):
         # 未来如果实现训练 encoder，一定要记得判断 torch.is_grad_enabled()，避免 validate 时保留梯度
         assert not self.train_image_encoder, "Unimplemented"
 
+        # if self.debug:
+        #     import debug
+        #     print("\ndebug output: (%s)" % self.model_type)
+        #     debug.initialize(self.model_type)
+        #     image_embedding = debug.get_image_embedding(batch['image'][0].detach()).cuda()
+        #     print(image_embedding[0].shape, "-->", batch['embedding'][0].shape)
+        #     print("diff", ((batch['embedding'][0] - image_embedding[0]).max()))
+            
+        #     batch['embedding'][0] = image_embedding[0]
+
         B = len(batch['embedding'])
 
         embeddings = batch['embedding']
@@ -163,9 +168,6 @@ class SAMWithLabelModule(pl.LightningModule):
         batch_mask = batch_masks[:, 0]
         batch_iou = batch_ious[:, 0]
 
-        print("batch_masksss.shape:", batch_masks.shape)
-        print("batch_ioussss.shape", batch_ious.shape)
-
         return batch_mask, batch_iou, batch_label
     
     def get_loss_and_update_metric(self, batch, batch_mask, batch_iou, batch_label, metric, batch_name):
@@ -185,13 +187,10 @@ class SAMWithLabelModule(pl.LightningModule):
         )
         binary_label = (lowres_labels[:, 0] == mask_cls[:, None, None]).to(torch.float)
         segmentation_loss, _dice_loss, _focal_loss = self.segmentation_loss(batch_mask, binary_label)
-
-        print("binary_label.shape: ", binary_label.shape)
     
 
         with torch.no_grad():
             pred_binary_mask = (batch_mask > self.model.mask_threshold).to(torch.long)
-            print("pred_binary_mask.shape: ", pred_binary_mask.shape)
             binary_label = binary_label.to(torch.long)
             iou = iou_func(pred_binary_mask, binary_label)
             assert (iou.shape[0] == B)
@@ -208,7 +207,7 @@ class SAMWithLabelModule(pl.LightningModule):
         iou_loss = ((iou - batch_iou) ** 2).mean()
         label_loss = self.cross_entropy_loss(batch_label, label_density)
 
-        if  self.debug:
+        if self.debug:
             if batch_name is None:
                 batch_name = "unnamed"
 
@@ -224,13 +223,12 @@ class SAMWithLabelModule(pl.LightningModule):
                 mode="nearest-exact"
             )[0].cpu().numpy()
 
-            print ("mask_cls.shape", mask_cls.shape)
-
             prompt = batch['prompt'][0].detach().cpu().numpy()
             visualize.add_object_2d(batch_name + "_img0",
                     image=batch['image'][0].detach().cpu().numpy(),
                     pd_label=pd_output_label,
                     gt_label=gt_output_label,
+                    prompt_points=[(prompt, 1)],
                     label_name=["negative", "positive"],
                         extras={
                         "prompt": prompt,

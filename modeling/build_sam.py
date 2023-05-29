@@ -11,6 +11,11 @@ prompt_embed_dim = 256
 image_size = 1024
 vit_patch_size = 16
 image_embedding_size = image_size // vit_patch_size
+pretrained_checkpoints = {
+    "vit_h": "checkpoint/sam_vit_h_4b8939.pth",
+    "vit_l": "checkpoint/sam_vit_l_0b3195.pth",
+    "vit_b": "checkpoint/sam_vit_b_01ec64.pth",
+}
 
 def get_encoder_builder(
     encoder_embed_dim,
@@ -178,3 +183,21 @@ sam_with_label_encoder_builders = {
         encoder_global_attn_indexes=[2, 5, 8, 11],
     ),
 }
+
+def build_pretrained_encoder(model_type, eval=True):
+    encoder = sam_with_label_encoder_builders[model_type]()
+    checkpoint_path = pretrained_checkpoints[model_type]
+
+    if eval:
+        encoder.eval()
+
+    with open(checkpoint_path, "rb") as f:
+        _state_dict = torch.load(f)
+    state_dict = encoder.state_dict()
+
+    for k, v in _state_dict.items():
+        if k.startswith("image_encoder"):
+            assert k.replace("image_encoder.", "") in state_dict.keys()
+            state_dict[k.replace("image_encoder.", "")] = v
+    encoder.load_state_dict(state_dict)
+    return encoder

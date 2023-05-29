@@ -29,22 +29,17 @@ fit:
     barebones: false
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
-    wandb_config:
-      name: no label loss
-      project: SAM with Labels
-      entity: ml-project-2023
-      save_dir: experiment_logs
   model:
     model_type: vit_b
     train_image_encoder: false
     train_prompt_encoder: true
     dice_loss_coef: 0.05
     focal_loss_coef: 1
-    label_loss_coef: 0.0
+    label_loss_coef: 1
     iou_loss_coef: 1
     optimizer_type: AdamW
     optimizer_kwargs:
-      lr: 0.0001
+      lr: 0.00001
       weight_decay: 0.1
     dice_loss_params:
       p: 1
@@ -52,13 +47,13 @@ fit:
     focal_loss_params:
       alpha: 0.25
       gamma: 2
-    debug: false
+    debug: true
   data:
     training_epoch_len: 20000
     validation_epoch_len: 2000
-    chunk_size: 32
-    batch_size: 16
-    delay: 256
+    chunk_size: 2
+    batch_size: 2
+    delay: 5
     encoder_batch_size: 1
     encoder_device: 'cuda:0'
     cache_path: embedding_cache
