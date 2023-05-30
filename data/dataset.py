@@ -106,6 +106,7 @@ class Dataset2D(data.Dataset):
                 ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True),
                 CropForegroundd(keys=["image", "label"], source_key="image"),
                 Orientationd(keys=["image", "label"], axcodes="RAS"),
+                Spacingd(keys=["image", "label"], pixdim=(1.0, 1.0, 1.0), mode=("bilinear", "nearest")),
                 EnsureTyped(keys=["image", "label"], device=self.device, track_meta=False),
             ]
         )
