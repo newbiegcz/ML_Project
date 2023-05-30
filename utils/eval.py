@@ -1,5 +1,4 @@
-import torch
-from torchmetrics import Dice
+import numpy as np
 
 def evaluate(predicter, data_iter):
 
@@ -13,9 +12,23 @@ def evaluate(predicter, data_iter):
         if lst > 0: 
             continue
         val_inputs, val_labels = (batch["image"], batch["label"])
-        dice = Dice(ignore_index = 0)
         val_outputs = predicter(val_inputs[0], val_labels[0][0])
-        cur = dice(torch.tensor(val_outputs, dtype = torch.int), torch.tensor(val_labels[0][0], dtype = torch.int))
+        val_outputs = np.array(val_outputs, dtype = np.int8)
+        val_labels = np.array(val_labels, dtype = np.int8)
+        cur = 0.00
+        nn = 0
+        for i in range(1, 14):
+            a = np.zeros(val_outputs.shape)
+            a[val_outputs == i] = 1
+            b = np.zeros(val_labels[0][0].shape)
+            b[val_labels[0][0] == i] = 1
+            c = np.zeros(val_outputs.shape)
+            c[(val_outputs == i) & (val_labels[0][0] == i)] = 1
+            if (np.sum(a) + np.sum(b) != 0):
+                cur += ((2.00 * np.sum(c)) / (np.sum(a) + np.sum(b)))
+                nn += 1
+        
+        cur /= float(nn)
         print("DICE: %.6lf" %cur)
         dice_val += cur
         num += 1
