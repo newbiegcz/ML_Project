@@ -190,3 +190,7 @@ Temporary Items
 .apdisk
 /raw_data/*
 /checkpoint/*
+
+# vim
+.*.*un~
+.*.swp
