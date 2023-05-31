@@ -5,6 +5,7 @@ from lightning.pytorch.cli import LightningCLI
 from training.sam_with_label.model_module import SAMWithLabelModule
 from training.sam_with_label.data_module import DataModule
 from lightning.pytorch.loggers.wandb import WandbLogger
+import torch.multiprocessing as multiprocessing
 
 # TODO: 优化 optimizer 的内存 (parameters & 更好的优化器)
 # TODO: 降低精度 && warning 中的建议
@@ -36,5 +37,6 @@ def cli_main():
         save_config_callback=None)
 
 if __name__ == "__main__":
+    multiprocessing.set_start_method('spawn', force=True)
     cli_main()
     

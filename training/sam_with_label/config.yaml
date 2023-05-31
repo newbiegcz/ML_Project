@@ -15,7 +15,7 @@ fit:
       - class_path: lightning.pytorch.callbacks.model_checkpoint.ModelCheckpoint
         init_args:
           save_top_k: 10
-          monitor: val_loss/total_loss
+          monitor: val_Dice/mDice
           mode: min
     max_epochs: 20
     overfit_batches: 0
@@ -35,7 +35,7 @@ fit:
       entity: ml-project-2023
       save_dir: experiment_logs
   model:
-    model_type: vit_b
+    model_type: vit_h
     train_image_encoder: false
     train_prompt_encoder: true
     dice_loss_coef: 0.05
