@@ -164,7 +164,7 @@ def get_dataloader_2d(file_key, transform_key, batch_size, shuffle, device=devic
 
 if __name__ == "__main__":
     import rich, cv2
-    it = get_dataloader_2d("validation", "naive_to_rgb", batch_size=1, shuffle=False)
+    it = get_dataloader_2d("training", "naive_to_rgb", batch_size=1, shuffle=False)
     res_w = 0
     res_h = 0
     for d in it:
@@ -176,12 +176,9 @@ if __name__ == "__main__":
     rich.print(d)
     rich.print(d["image"].shape)
     input("")
-    cnt=0
     while True:
         for d in it:
             v = d['image'][0].clone()
             v[0] = d['label'][0][0] / 14 + d['image'][0][0]
-            cnt+=1
-            print(cnt)
             cv2.imshow("qwq", v.cpu().numpy().transpose(1, 2, 0))
-            cv2.waitKey(100)
+            cv2.waitKey(10)
