@@ -195,3 +195,4 @@ Temporary Items
 /embedding_cache/
 imgui.ini
 /__test/
+/experiment_logs/

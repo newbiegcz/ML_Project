@@ -10,8 +10,8 @@ from torchvision.ops.boxes import batched_nms, box_area  # type: ignore
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from model.sam import SamWithLabel
-from model.predictor import SamWithLabelPredictor
+from modeling.sam import SamWithLabel
+from modeling.predictor import SamWithLabelPredictor
 from third_party.segment_anything.utils.amg import (
     MaskData,
     area_from_rle,
@@ -39,7 +39,8 @@ class SamAutomaticLabelGenerator():
         points_per_side: Optional[int] = 32,
         points_per_batch: int = 64,
         pred_iou_thresh: float = 0.88,
-        stability_score_thresh: float = 0.95,
+        #stability_score_thresh: float = 0.95,
+        stability_score_thresh: float = 0,
         stability_score_offset: float = 1.0,
         box_nms_thresh: float = 0.7,
         crop_n_layers: int = 0,
@@ -144,12 +145,16 @@ class SamAutomaticLabelGenerator():
         Returns:
           np.ndarray : The label of each pixel, with shape (H, W).
         """
+        print('generating labels...')
         masks = self.generate(image)
         labels = np.zeros(image.shape[:2], dtype=np.uint8)
+        #tmp = []
         for idx in range(len(masks)):
-            mask = masks[idx]["segmentations"]
-            label = masks[idx]["label"]
+            mask = masks[idx]["segmentation"]
+            label_pred = masks[idx]["label"]
+            label = np.array(label_pred).argmax()
             labels[mask > 0] = label
+            #tmp.append((mask, label_pred))
         return labels
 
     @torch.no_grad()
@@ -179,17 +184,21 @@ class SamAutomaticLabelGenerator():
                  the mask, given in XYWH format.
         """
         # Generate masks
+        print('Generating masks...')
         mask_data = self._generate_masks(image)
 
         # Filter small disconnected regions and holes in masks
+        print('Filtering small disconnected regions and holes in masks...')
         if self.min_mask_region_area > 0:
             mask_data = self.postprocess_small_regions(
                 mask_data,
                 self.min_mask_region_area,
                 max(self.box_nms_thresh, self.crop_nms_thresh),
             )
+        print('After filter small disconnected regions and holes in masks:', len(mask_data["rles"]))
 
         # Encode masks
+        print('Encoding masks...')
         if self.output_mode == "coco_rle":
             mask_data["segmentations"] = [coco_encode_rle(rle) for rle in mask_data["rles"]]
         elif self.output_mode == "binary_mask":
@@ -198,12 +207,16 @@ class SamAutomaticLabelGenerator():
             mask_data["segmentations"] = mask_data["rles"]
 
         # Write mask records
+        print('Writing mask records...')
         curr_anns = []
         for idx in range(len(mask_data["segmentations"])):
+            print('label prediction:', mask_data["label_preds"][idx])
+            mask = mask_data["segmentations"][idx]
+            np.savetxt('output.txt', mask, fmt='%d')
             ann = {
                 "segmentation": mask_data["segmentations"][idx],
                 "area": area_from_rle(mask_data["rles"][idx]),
-                "label": mask_data["label_preds"][idx].argmax().item(),
+                "label": mask_data["label_preds"][idx].tolist(),
                 "bbox": box_xyxy_to_xywh(mask_data["boxes"][idx]).tolist(),
                 "predicted_iou": mask_data["iou_preds"][idx].item(),
                 "point_coords": [mask_data["points"][idx].tolist()],
@@ -239,6 +252,8 @@ class SamAutomaticLabelGenerator():
                 iou_threshold=self.crop_nms_thresh,
             )
             data.filter(keep_by_nms)
+
+        print('After filter by nms between crops:', len(data["rles"]))
 
         data.to_numpy()
         return data
@@ -278,6 +293,7 @@ class SamAutomaticLabelGenerator():
             iou_threshold=self.box_nms_thresh,
         )
         data.filter(keep_by_nms)
+        print('After filter by nms within crop:', len(data["rles"]))
 
         # Return to the original image frame
         data["boxes"] = uncrop_boxes_xyxy(data["boxes"], crop_box)
@@ -302,34 +318,43 @@ class SamAutomaticLabelGenerator():
         masks, iou_preds, label_preds, _ = self.predictor.predict_torch(
             in_points[:, None, :],
             in_labels[:, None],
-            multimask_output=True,
+            multimask_output=False,
             return_logits=True,
         )
 
         # Serialize predictions and store in MaskData
-
-        # print(iou_preds.shape) 64x3
-        # print(label_preds.shape) 64x14
+        #print(masks.shape) #64x1xHxW
+        #print(iou_preds.shape) #64x1
+        #print(label_preds.shape) #64x14
         data = MaskData(
             masks=masks.flatten(0, 1),
             iou_preds=iou_preds.flatten(0, 1),
-            label_preds=label_preds.flatten(0, 1),
+            label_preds=label_preds,
             points=torch.as_tensor(points.repeat(masks.shape[1], axis=0)),
         )
         del masks
+
+        print('Before filter by IoU:', len(data["masks"]))
+        print('IoU predictions:', data["iou_preds"])
 
         # Filter by predicted IoU
         if self.pred_iou_thresh > 0.0:
             keep_mask = data["iou_preds"] > self.pred_iou_thresh
             data.filter(keep_mask)
 
+        print('After filter by IoU:', len(data["masks"]))
+
         # Calculate stability score
+        
         data["stability_score"] = calculate_stability_score(
             data["masks"], self.predictor.model.mask_threshold, self.stability_score_offset
         )
         if self.stability_score_thresh > 0.0:
             keep_mask = data["stability_score"] >= self.stability_score_thresh
             data.filter(keep_mask)
+
+        print('After filter by stability:', len(data["masks"]))
+        
 
         # Threshold masks and calculate boxes
         data["masks"] = data["masks"] > self.predictor.model.mask_threshold
@@ -339,6 +364,8 @@ class SamAutomaticLabelGenerator():
         keep_mask = ~is_box_near_crop_edge(data["boxes"], crop_box, [0, 0, orig_w, orig_h])
         if not torch.all(keep_mask):
             data.filter(keep_mask)
+
+        print('After filter by touch crop boundaries:', len(data["masks"]))
 
         # Compress to RLE
         data["masks"] = uncrop_masks(data["masks"], crop_box, orig_h, orig_w)

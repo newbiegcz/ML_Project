@@ -1,6 +1,6 @@
 # Warning: this code has not been tested yet.
 
-from model.sam import SamWithLabel
+from modeling.sam import SamWithLabel
 import numpy as np
 from typing import List
 from automatic_label_generator import SamAutomaticLabelGenerator
@@ -17,6 +17,7 @@ class LabelPredicter():
         """
         self.model = sam_model
         self.automatic_label_generator = SamAutomaticLabelGenerator(self.model)
+        #print(self.model.device)
 
     def predict(self, images : List[np.ndarray]) -> List[np.ndarray]:
         """
