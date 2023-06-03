@@ -200,7 +200,7 @@ class SAMWithLabelModule(pl.LightningModule):
             intersection = (lowres_labels[:, 0] * pred_binary_mask).reshape(B, -1)
             _ids = (intersection + (14 * torch.arange(B, device=self.device).reshape(-1, 1))).to(torch.long)
             count = torch.bincount(_ids.reshape(-1), minlength=14 * B).reshape(B, 14)
-            count[:, 0] -= (~pred_binary_mask.reshape(B, -1)).sum(dim=1)
+            count[:, 0] -= ((pred_binary_mask==0).reshape(B, -1)).sum(dim=1)
             # print(count[0])
             label_density = count / torch.sum(count, dim=1, keepdim=True)
             assert (label_density.shape[0] == B)
