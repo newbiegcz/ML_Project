@@ -5,7 +5,7 @@ from third_party.segment_anything.build_sam import sam_model_registry
 import torch
 import torch.optim as optim
 import torch.nn as nn
-from losses import SegmentationLoss
+from .losses import SegmentationLoss
 from utils.visualize import default_label_names
 import utils.visualize as visualize
 from modeling.build_sam import pretrained_checkpoints
