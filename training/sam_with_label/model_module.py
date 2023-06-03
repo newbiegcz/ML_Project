@@ -5,7 +5,7 @@ from third_party.segment_anything.build_sam import sam_model_registry
 import torch
 import torch.optim as optim
 import torch.nn as nn
-from losses import SegmentationLoss
+from .losses import SegmentationLoss
 from utils.visualize import default_label_names
 import utils.visualize as visualize
 from modeling.build_sam import pretrained_checkpoints
@@ -200,6 +200,8 @@ class SAMWithLabelModule(pl.LightningModule):
             intersection = (lowres_labels[:, 0] * pred_binary_mask).reshape(B, -1)
             _ids = (intersection + (14 * torch.arange(B, device=self.device).reshape(-1, 1))).to(torch.long)
             count = torch.bincount(_ids.reshape(-1), minlength=14 * B).reshape(B, 14)
+            count[:, 0] -= (~pred_binary_mask.reshape(B, -1)).sum(dim=1)
+            # print(count[0])
             label_density = count / torch.sum(count, dim=1, keepdim=True)
             assert (label_density.shape[0] == B)
 

@@ -363,7 +363,7 @@ class ExpDataset(Dataset):
         self.model_type = model_type
         self.size_limit = size_limit
 
-        self.cache = diskcache.Cache(path, size_limit=size_limit)
+        self.cache = diskcache.Cache(path, size_limit=size_limit, eviction="last")
 
         self.queue = Queue(maxsize=chunk_size)
         self.producer = Producer( 
