@@ -1,5 +1,22 @@
 #do not import this!!!!
 assert(__name__ == "__main__")
+
+'''
+This script is used to preprocess the data and save it to disk.
+
+The data is saved in the following format:
+    datapoints: A list of datapoints, each datapoint is a dictionary with the following keys:
+        image_id: The image id(the id in the dictionary of embeddings)
+        prompt_point: The prompt point
+        prompt_box: The prompt box
+        mask_cls: The mask class
+
+    embeddings: A dictionary of embeddings, each embedding is a dictionary with the following keys:
+        embedding: The embedding
+        low_res_image: The low resolution image
+        label: The label
+
+'''
 import diskcache
 import torch
 from torch.utils.data import Dataset
@@ -25,10 +42,10 @@ checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
 datapoints_disk_path = "processed_data/datapoints"
 embedding_disk_path = "processed_data/embeddings"
 
-size_threshold_in_bytes = 100 * 1024 * 1024
+size_threshold_in_bytes = 300 * 1024 * 1024
 debug = True
-times = 1 # The number of times to augment an image
-datapoints = 10 # The number of datapoints
+times = 5 # The number of times to augment an image
+datapoints = 100 # The number of datapoints
 min_pixels = 5
 
 
@@ -149,7 +166,7 @@ seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
 data_files = data_files["training"][:1]  #only the first person
 raw_dataset = Dataset2D(data_files, device=torch.device('cpu'), transform=None, dtype=np.float32)
-raw_dataset = raw_dataset[45 : 48]
+raw_dataset = raw_dataset[40 : 60]
 
 
 def gen(idx):
@@ -161,7 +178,7 @@ def gen(idx):
 print("doing image encoding...")
 import torch.nn.functional
 
-batch_size = 1
+batch_size = 2
 
 img_list = []
 label_list = []
@@ -195,7 +212,7 @@ for i in tqdm(range(len(raw_dataset))):
     if image_cache.volume() > size_threshold_in_bytes:
         break
 
-print("encoding done by encode %d embeddings!" % num_image)
+print("encoding done by encode %d embeddings, the total estimate number of image is %d." % (num_image, len(raw_dataset) * times))
 
 num_datapoints = 0
 
@@ -272,7 +289,7 @@ if debug:
             viz.add_object_2d("image" + str(i),
                           image=image_cache[datum['image_id']]["low_res_image"].squeeze(0).numpy(),
                           pd_label=None,
-                          gt_label=torch.nn.functional.interpolate(image_cache[datum['image_id']]["label"], size=(256, 256), mode='nearest').numpy(),
+                          gt_label=torch.nn.functional.interpolate(image_cache[datum['image_id']]["label"].unsqueeze(0), size=(256, 256), mode='nearest').numpy()[0],
                           prompt_points=[([prompt_point[0] // 4, prompt_point[1] // 4], 0)],
                           label_name=viz.default_label_names,
                              extras={
@@ -284,7 +301,7 @@ if debug:
             viz.add_object_2d("image" + str(i),
                           image=image_cache[datum['image_id']]["low_res_image"].squeeze(0).numpy(),
                           pd_label=None,
-                          gt_label=torch.nn.functional.interpolate(image_cache[datum['image_id']]["label"], size=(256, 256), mode='nearest').numpy(),
+                          gt_label=torch.nn.functional.interpolate(image_cache[datum['image_id']]["label"].unsqueeze(0), size=(256, 256), mode='nearest').numpy()[0],
                           prompt_points=[([prompt_point[0] // 4, prompt_point[1] // 4], 0), ([prompt_box[0][0] // 4, prompt_box[0][1] // 4], 0), ([prompt_box[1][0] // 4, prompt_box[1][1] // 4], 0)],
                           label_name=viz.default_label_names,
                              extras={
