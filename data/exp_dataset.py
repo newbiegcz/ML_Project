@@ -273,7 +273,7 @@ class Producer:
             if self.max_datapoints is not None and self.max_datapoints > 0 and self.current_step % self.max_datapoints == 0:
                 self.manual_seed(self.seed)
             if len(self.available_datapoint_sets) == 0 or self.available_datapoint_sets[0][-1] > self.current_step:
-                while len(self.buffer_images) < self.encoder_batch_size and (len(self.available_datapoint_sets) < self.chunk_size or self.available_datapoint_sets[0][-1] > self.current_step):
+                while len(self.buffer_images) < self.encoder_batch_size and (len(self.available_datapoint_sets) == 0 or self.available_datapoint_sets[0][-1] > self.current_step):
                     d = self.gen_image()
                     image = d['image']
                     label = d['label']
