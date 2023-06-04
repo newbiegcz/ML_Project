@@ -103,7 +103,7 @@ def wrap_albumentations_transform(transform):
 
 class Producer:
     prompt_per_mask=3
-    def __init__(self, data_files, augment_data, queue: Queue, chunk_size, encoder_batch_size, encoder_device, model_type, cache, delay, seed, debug):
+    def __init__(self, data_files, augment_data, queue: Queue, chunk_size, encoder_batch_size, encoder_device, model_type, cache, delay, seed, max_datapoints, debug):
         self.augment_data = augment_data
         self.seed = seed
         self.data_files = data_files
@@ -115,8 +115,13 @@ class Producer:
         self.delay = delay
         self.cache = cache
         self.debug = debug
+        self.max_datapoints = max_datapoints
         
         self.initialized = False
+
+    def manual_seed(self, seed):
+        self.seed_rng.manual_seed(seed)
+        self.normal_rng.manual_seed(seed + 1)
     
     def initialize(self):
         assert not self.initialized
@@ -147,8 +152,8 @@ class Producer:
 
         self.seed_rng = torch.Generator(device='cpu')
         self.normal_rng = torch.Generator(device='cpu')
-        self.seed_rng.manual_seed(self.seed)
-        self.normal_rng.manual_seed(self.seed + 1)
+
+        self.manual_seed(self.seed)
 
         # 如果打算不使用水平切面，可能应该增加透视变换的 augmentation
         # TODO: color map 前先 jitter
@@ -265,8 +270,10 @@ class Producer:
 
         while True:
             self.current_step += 1
+            if self.max_datapoints is not None and self.max_datapoints > 0 and self.current_step % self.max_datapoints == 0:
+                self.manual_seed(self.seed)
             if len(self.available_datapoint_sets) == 0 or self.available_datapoint_sets[0][-1] > self.current_step:
-                while len(self.buffer_images) < self.encoder_batch_size and (len(self.available_datapoint_sets) < self.chunk_size or self.available_datapoint_sets[0][-1] > self.current_step):
+                while len(self.buffer_images) < self.encoder_batch_size and (len(self.available_datapoint_sets) == 0 or self.available_datapoint_sets[0][-1] > self.current_step):
                     d = self.gen_image()
                     image = d['image']
                     label = d['label']
@@ -344,6 +351,7 @@ class ExpDataset(Dataset):
                     path='embedding_cache',
                     encoder_device=torch.device('cpu'),
                     delay=100,
+                    max_datapoints=None,
                     debug=False,
                     seed
                  ):   
@@ -363,7 +371,7 @@ class ExpDataset(Dataset):
         self.model_type = model_type
         self.size_limit = size_limit
 
-        self.cache = diskcache.Cache(path, size_limit=size_limit)
+        self.cache = diskcache.Cache(path, size_limit=size_limit, eviction="last")
 
         self.queue = Queue(maxsize=chunk_size)
         self.producer = Producer( 
@@ -376,6 +384,7 @@ class ExpDataset(Dataset):
                             cache=self.cache,
                             seed=seed,
                             delay=delay,
+                            max_datapoints=max_datapoints,
                             debug=debug,
                             augment_data=augment_data,
                         )

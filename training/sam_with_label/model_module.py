@@ -193,6 +193,7 @@ class SAMWithLabelModule(pl.LightningModule):
 
         with torch.no_grad():
             pred_binary_mask = (batch_mask > self.model.mask_threshold).to(torch.long)
+            
             binary_label = binary_label.to(torch.long)
             iou = iou_func(pred_binary_mask, binary_label)
             assert (iou.shape[0] == B)
@@ -200,12 +201,23 @@ class SAMWithLabelModule(pl.LightningModule):
             intersection = (lowres_labels[:, 0] * pred_binary_mask).reshape(B, -1)
             _ids = (intersection + (14 * torch.arange(B, device=self.device).reshape(-1, 1))).to(torch.long)
             count = torch.bincount(_ids.reshape(-1), minlength=14 * B).reshape(B, 14)
-            label_density = count / torch.sum(count, dim=1, keepdim=True)
+            count[:, 0] -= ((pred_binary_mask==0).reshape(B, -1)).sum(dim=1)
+            # print(count[0])
+            S = torch.sum(count, dim=1, keepdim=True)
+            label_density = count / S
             assert (label_density.shape[0] == B)
+
+            one_hot_background = torch.zeros((14,), dtype=label_density.dtype, device=label_density.device)
+            one_hot_background[0] = 1
+
+            if torch.isnan(label_density).any():
+                print("\n\n\nWarning: nan in label_density!!!!! \n 可能的一种解释是针对背景，你的 model 要求 loss，所以他可能逐渐学会不把背景分出来。现在这样处理，之后有待验证。\n\n\n")
+
+            label_density[S[:, 0] == 0] = one_hot_background.unsqueeze(0)
 
             metric.update(pred_binary_mask, binary_label, mask_cls)
             # print(iou)
-
+        
         iou_loss = ((iou - batch_iou) ** 2).mean()
         label_loss = self.cross_entropy_loss(batch_label, label_density)
 
