@@ -8,6 +8,7 @@ The data is saved in the following format:
     datapoints: A list of datapoints, each datapoint is a dictionary with the following keys:
         image_id: The image id(the id in the dictionary of embeddings)
         prompt_point: The prompt point
+        prompt_box: The prompt box
         mask_cls: The mask class
 
     embeddings: A dictionary of embeddings, each embedding is a dictionary with the following keys:
@@ -18,6 +19,7 @@ The data is saved in the following format:
 '''
 import diskcache
 import torch
+from sys import getsizeof
 from torch.utils.data import Dataset
 from torch.multiprocessing import Queue
 import numpy as np
@@ -44,7 +46,7 @@ embedding_disk_path = "processed_data/embeddings"
 size_threshold_in_bytes = 200 * 1024 * 1024 * 1024 # 200 GB
 debug = False
 times = 10 # The number of times to augment an image
-datapoints = 100000000 # The number of datapoints
+datapoints = 10000000 # The number of datapoints
 min_pixels = 5
 
 
@@ -163,10 +165,8 @@ transform_2d = (
 
 seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
-data_files = data_files["training"][:1]  #only the first person
+data_files = data_files["training"]
 raw_dataset = Dataset2D(data_files, device=torch.device('cpu'), transform=None, dtype=np.float32)
-raw_dataset = raw_dataset[40 : 60]
-
 
 def gen(idx):
     image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
@@ -177,7 +177,7 @@ def gen(idx):
 print("doing image encoding...")
 import torch.nn.functional
 
-batch_size = 2
+batch_size = 3
 
 img_list = []
 label_list = []
@@ -238,19 +238,6 @@ def get_prompt(label, cur_label):
     nonzero_indexes = torch.nonzero(label == cur_label)
     inds = torch.randint(len(nonzero_indexes), (1,), generator=seed_rng).item()
     result["prompt_point"] = [nonzero_indexes[inds][1], nonzero_indexes[inds][0]]
-    x1, x2, y1, y2 = bounding_box(label == cur_label)
-    lenx = x2 - x1
-    leny = y2 - y1
-    dx1, dx2 = np.random.normal(0, lenx * 0.1, 2)
-    dy1, dy2 = np.random.normal(0, leny * 0.1, 2)
-    x1 += min(20, max(-20, int(dx1)))
-    x2 += min(20, max(-20, int(dx2)))
-    y1 += min(20, max(-20, int(dy1)))
-    y2 += min(20, max(-20, int(dy2)))
-    if is_box_valid(x1, x2, y1, y2):  
-        result["prompt_box"] = [[x1, y1], [x2, y2]]
-    else:
-        result["prompt_box"] = None
 
     return result
 
@@ -272,6 +259,7 @@ for i in tqdm(range(datapoints)):
 
     datum = get_prompt(image_cache[image_index]["label"][0], cur_label)
     datum["image_id"] = image_index
+    
     datapoints_cache[i] = datum
 
 print("datapoints completed!")
@@ -282,26 +270,12 @@ if debug:
     for i in range(datapoints):
         datum = datapoints_cache[i]
         prompt_point = datum["prompt_point"]
-        prompt_box = datum["prompt_box"]
         cls = datum["mask_cls"]
-        if prompt_box is None:
-            viz.add_object_2d("image" + str(i),
+        viz.add_object_2d("image" + str(i),
                           image=image_cache[datum['image_id']]["low_res_image"].squeeze(0).numpy(),
                           pd_label=None,
                           gt_label=torch.nn.functional.interpolate(image_cache[datum['image_id']]["label"].unsqueeze(0), size=(256, 256), mode='nearest').numpy()[0],
                           prompt_points=[([prompt_point[0] // 4, prompt_point[1] // 4], 0)],
-                          label_name=viz.default_label_names,
-                             extras={
-                              "prompt": prompt_point,
-                              "prompt_label": viz.default_label_names[cls]
-                          }
-            )
-        else:
-            viz.add_object_2d("image" + str(i),
-                          image=image_cache[datum['image_id']]["low_res_image"].squeeze(0).numpy(),
-                          pd_label=None,
-                          gt_label=torch.nn.functional.interpolate(image_cache[datum['image_id']]["label"].unsqueeze(0), size=(256, 256), mode='nearest').numpy()[0],
-                          prompt_points=[([prompt_point[0] // 4, prompt_point[1] // 4], 0), ([prompt_box[0][0] // 4, prompt_box[0][1] // 4], 0), ([prompt_box[1][0] // 4, prompt_box[1][1] // 4], 0)],
                           label_name=viz.default_label_names,
                              extras={
                               "prompt": prompt_point,
