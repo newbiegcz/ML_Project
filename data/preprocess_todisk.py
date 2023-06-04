@@ -1,3 +1,5 @@
+# do not import this!!!
+assert(__name__ == "__main__")
 import diskcache
 import torch
 from torch.utils.data import Dataset
