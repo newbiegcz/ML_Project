@@ -19,6 +19,7 @@ The data is saved in the following format:
 '''
 import diskcache
 import torch
+from sys import getsizeof
 from torch.utils.data import Dataset
 from torch.multiprocessing import Queue
 import numpy as np
@@ -44,8 +45,8 @@ embedding_disk_path = "processed_data/embeddings"
 
 size_threshold_in_bytes = 300 * 1024 * 1024
 debug = True
-times = 5 # The number of times to augment an image
-datapoints = 100 # The number of datapoints
+times = 1 # The number of times to augment an image
+datapoints = 100000 # The number of datapoints
 min_pixels = 5
 
 
@@ -166,7 +167,7 @@ seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
 data_files = data_files["training"][:1]  #only the first person
 raw_dataset = Dataset2D(data_files, device=torch.device('cpu'), transform=None, dtype=np.float32)
-raw_dataset = raw_dataset[40 : 60]
+raw_dataset = raw_dataset[45 : 47]
 
 
 def gen(idx):
@@ -273,6 +274,7 @@ for i in tqdm(range(datapoints)):
 
     datum = get_prompt(image_cache[image_index]["label"][0], cur_label)
     datum["image_id"] = image_index
+    
     datapoints_cache[i] = datum
 
 print("datapoints completed!")
