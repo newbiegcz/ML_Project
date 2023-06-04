@@ -75,6 +75,7 @@ class DataModule(pl.LightningDataModule):
             seed=self.seed,
             delay=self.delay,
             augment_data=self.augment_validation_data,
+            max_datapoints=self.validation_epoch_len,
             debug=self.debug
         )
         
