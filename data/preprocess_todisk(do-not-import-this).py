@@ -24,8 +24,8 @@ datapoints_disk_path = "processed_data/datapoints"
 embedding_disk_path = "processed_data/embeddings"
 
 debug = True
-times = 1 # The number of times to augment an image
-datapoints = 100 # The number of datapoints
+times = 20 # The number of times to augment an image
+datapoints = 100000 # The number of datapoints
 min_pixels = 5
 
 
