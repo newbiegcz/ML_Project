@@ -56,13 +56,13 @@ fit:
   data:
     training_epoch_len: 20000
     validation_epoch_len: 20000
-    chunk_size: 64
-    batch_size: 32
-    delay: 512
+    chunk_size: 1
+    batch_size: 1
+    delay: 1
     encoder_batch_size: 1
-    encoder_device: 'cuda:0'
+    encoder_device: 'cpu'
     cache_path: embedding_cache
-    cache_size_limit: 10737418240
+    cache_size_limit: 4294967296
     seed: 1166117
     augment_training_data: true
     augment_validation_data: true
