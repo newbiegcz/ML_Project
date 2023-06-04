@@ -44,7 +44,7 @@ fit:
     iou_loss_coef: 0.5
     optimizer_type: AdamW
     optimizer_kwargs:
-      lr: 0.00001
+      lr: 0.0001
       weight_decay: 0.1
     dice_loss_params:
       p: 1
