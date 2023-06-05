@@ -44,10 +44,10 @@ datapoints_disk_path = "processed_data/datapoints"
 embedding_disk_path = "processed_data/embeddings"
 
 size_threshold_in_bytes= 200 * 1024 * 1024 * 1024 # 200 GB
-debug = True
-times = 3 # The number of times to augment an image
-datapoints_for_training = 200 # The number of datapoints to use for training
-datapoints_for_validation = 100 # The number of datapoints to use for validation
+debug = False
+times = 10 # The number of times to augment an image
+datapoints_for_training = 10000000 # The number of datapoints to use for training
+datapoints_for_validation = 1000000 # The number of datapoints to use for validation
 min_pixels = 5
 
 
@@ -180,14 +180,12 @@ transform_2d_for_validation = (
     )
 )
 
-seed_rng = torch.Generator(device='cpu')
+seed_rng = torch.Generator(device='cuda:0')
 seed_rng.manual_seed(19260817)
-data_files_training = data_files["training"][:1]
-data_files_validation = data_files["validation"][:1]
-raw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
-raw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
-raw_dataset_training = raw_dataset_training[40 : 50]
-raw_dataset_validation = raw_dataset_validation[40 : 50]
+data_files_training = data_files["training"]
+data_files_validation = data_files["validation"]
+raw_dataset_training = Dataset2D(data_files_training, device=torch.device('cuda:0'), transform=None, dtype=np.float32, compress = True)
+raw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cuda:0'), transform=None, dtype=np.float32, compress = True)
 
 def gen_training(idx):
     image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
@@ -204,7 +202,7 @@ def gen_validation(idx):
 print("doing image encoding for training...")
 import torch.nn.functional
 
-batch_size = 2
+batch_size = 4
 
 img_list = []
 label_list = []
