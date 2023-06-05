@@ -6,7 +6,7 @@ fit:
   seed_everything: 42
 
   trainer:
-    accelerator: gpu
+    accelerator: cpu
     strategy: auto
     devices: auto
     num_nodes: 1
@@ -54,16 +54,12 @@ fit:
       gamma: 2
     debug: false
   data:
-    training_epoch_len: 20000
-    validation_epoch_len: 20000
-    chunk_size: 64
-    batch_size: 32
-    delay: 512
-    encoder_batch_size: 1
-    encoder_device: 'gpu'
-    cache_path: embedding_cache
-    cache_size_limit: 4294967296
-    seed: 1166117
-    augment_training_data: true
-    augment_validation_data: true
+    embedding_file_path: "processed_data/embeddings"
+    datapoint_file_path: "processed_data/datapoints"
+    model_type: "vit_h"
+    training_epoch_len: 1500
+    validation_epoch_len: 1500
+    batch_size: 4
+    debug: False
+
   ckpt_path: null
