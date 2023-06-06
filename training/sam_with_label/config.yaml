@@ -9,7 +9,7 @@ fit:
     accelerator: gpu
     strategy: auto
     devices: auto
-    max_epochs: 400*
+    max_epochs: 400
     limit_train_batches: 0.01
     num_nodes: 1
     precision: 32-true
