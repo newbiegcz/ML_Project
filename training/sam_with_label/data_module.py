@@ -76,18 +76,19 @@ class ValidationDataset(Dataset):
 # TODO: 在实现多进程训练时，setup 会被每个进程调用一次。应该考虑让所有进程共享一个 queue，而 workers 负责分配不同的数据生成任务.
 class DataModule(pl.LightningDataModule):
     def __init__(self, 
-                 embedding_file_path,
-                 datapoint_file_path,
+                 embedding_file_path: str,
+                 datapoint_file_path: str,
                  model_type: str = "vit_h",
                  batch_size: int = 128,
+                 num_workers: int = 4,
                  debug: bool = False
                 ):
         super().__init__()
 
         self.model_type = model_type
         self.batch_size = batch_size
+        self.num_workers = num_workers
 
-        # TODO: This will keep two copies of the encoder in memory. We should find a way to avoid this.
         self.training_dataset = TrainDataset(
                 embedding_file_path=embedding_file_path,
                 datapoint_file_path=datapoint_file_path,
@@ -107,10 +108,10 @@ class DataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         # Important: shuffle must be True, otherwise the training will be wrong.
-        return DataLoader(self.training_dataset, batch_size=self.batch_size, shuffle=True, num_workers=5)
+        return DataLoader(self.training_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.validation_dataset, batch_size=self.batch_size, num_workers=5)
+        return DataLoader(self.validation_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
 
     def test_dataloader(self):
         return None

@@ -59,6 +59,7 @@ fit:
     datapoint_file_path: "/root/autodl-tmp/datapoints"
     model_type: "vit_h"
     batch_size: 64
+    num_workers: 4    # 在服务器应当调整
     debug: False
 
   ckpt_path: null
