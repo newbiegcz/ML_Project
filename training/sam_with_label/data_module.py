@@ -6,8 +6,6 @@ from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 import diskcache
 
-size_10gb = 10 * 1024 * 1024 * 1024
-
 class TrainDataset(Dataset):
 
     def __init__(self, *,
@@ -21,8 +19,8 @@ class TrainDataset(Dataset):
 
         self.model_type = model_type
 
-        self.embedding_cache = diskcache.Cache(embedding_file_path)
-        self.datapoint_cache = diskcache.Cache(datapoint_file_path)
+        self.embedding_cache = diskcache.Cache(embedding_file_path, eviction_policy = "none")
+        self.datapoint_cache = diskcache.Cache(datapoint_file_path, eviction_policy = "none")
 
         self.epoch_len = epoch_len
 
@@ -36,6 +34,7 @@ class TrainDataset(Dataset):
 
     def __getitem__(self, idx):
         id = (self.enum[idx] * self.epoch_len + idx) % self.num_datapoints
+        self.enum[idx] += 1
         res = dict()
         res["embedding"] = self.embedding_cache[("training", self.datapoint_cache[("training", id)]["image_id"])]["embedding"]
         res["label"] = self.embedding_cache[("training", self.datapoint_cache[("training", id)]["image_id"])]["label"]
@@ -60,8 +59,8 @@ class ValidationDataset(Dataset):
 
         self.model_type = model_type
 
-        self.embedding_cache = diskcache.Cache(embedding_file_path)
-        self.datapoint_cache = diskcache.Cache(datapoint_file_path)
+        self.embedding_cache = diskcache.Cache(embedding_file_path, eviction_policy = "none")
+        self.datapoint_cache = diskcache.Cache(datapoint_file_path, eviction_policy = "none")
 
         self.epoch_len = epoch_len
 
@@ -124,10 +123,10 @@ class DataModule(pl.LightningDataModule):
         pass
 
     def train_dataloader(self):
-        return DataLoader(self.training_dataset, batch_size=self.batch_size, num_workers=3)
+        return DataLoader(self.training_dataset, batch_size=self.batch_size, num_workers=5)
 
     def val_dataloader(self):
-        return DataLoader(self.validation_dataset, batch_size=self.batch_size, num_workers=3)
+        return DataLoader(self.validation_dataset, batch_size=self.batch_size, num_workers=5)
 
     def test_dataloader(self):
         return None

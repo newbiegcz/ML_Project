@@ -19,7 +19,6 @@ The data is saved in the following format:
 '''
 import diskcache
 import torch
-from sys import getsizeof
 from torch.utils.data import Dataset
 from torch.multiprocessing import Queue
 import numpy as np
@@ -36,25 +35,25 @@ import rich
 from data.dataset import Dataset2D
 from modeling.build_sam import build_pretrained_encoder
 from data.dataset import data_files
-import utils.visualize as viz
 from tqdm import tqdm
 
 checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
-datapoints_disk_path = "processed_data/datapoints"
-embedding_disk_path = "processed_data/embeddings"
+datapoints_disk_path = "/root/autodl-tmp/datapoints"
+embedding_disk_path = "/root/autodl-tmp/embeddings"
 
-size_threshold_in_bytes= 200 * 1024 * 1024 * 1024 # 200 GB
+size_threshold_in_bytes= 400 * 1024 * 1024 * 1024 # 200 GB
 debug = False
 times = 10 # The number of times to augment an image
-datapoints_for_training = 10000000 # The number of datapoints to use for training
-datapoints_for_validation = 1000000 # The number of datapoints to use for validation
+datapoints_for_training = 1000000 # The number of datapoints to use for training
+datapoints_for_validation = 10000 # The number of datapoints to use for validation
 min_pixels = 5
 
 
-datapoints_cache = diskcache.Cache(datapoints_disk_path)
-image_cache = diskcache.Cache(embedding_disk_path)
+datapoints_cache = diskcache.Cache(datapoints_disk_path, eviction_policy = "none")
+image_cache = diskcache.Cache(embedding_disk_path, eviction_policy = "none")
 
 encoder = build_pretrained_encoder("vit_h", eval=True)
+encoder.to("cuda")
 
 all_cmaps = plt.colormaps()
 exclude = ['flag', 'prism', 'ocean', 'gist_earth', 'terrain',
@@ -180,12 +179,12 @@ transform_2d_for_validation = (
     )
 )
 
-seed_rng = torch.Generator(device='cuda:0')
+seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
 data_files_training = data_files["training"]
 data_files_validation = data_files["validation"]
-raw_dataset_training = Dataset2D(data_files_training, device=torch.device('cuda:0'), transform=None, dtype=np.float32, compress = True)
-raw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cuda:0'), transform=None, dtype=np.float32, compress = True)
+raw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
+raw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 
 def gen_training(idx):
     image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
@@ -217,7 +216,7 @@ for i in tqdm(range(len(raw_dataset_training))):
             img = torch.stack(img_list)
 
             with torch.inference_mode():
-                embeddings = encoder(img)
+                embeddings = encoder(img.cuda()).cpu()
 
             for k in range(batch_size):
                 cur = dict()
@@ -253,7 +252,7 @@ for i in tqdm(range(len(raw_dataset_validation))):
         img = torch.stack(img_list)
 
         with torch.inference_mode():
-            embeddings = encoder(img)
+            embeddings = encoder(img.cuda()).cpu()
 
         for k in range(batch_size):
             cur = dict()
