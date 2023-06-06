@@ -11,8 +11,7 @@ class TrainDataset(Dataset):
     def __init__(self, *,
                     datapoint_file_path,
                     embedding_file_path,
-                    model_type='vit_h',
-                    epoch_len = 10
+                    model_type='vit_h'
                  ):   
         
         super().__init__()
@@ -22,24 +21,18 @@ class TrainDataset(Dataset):
         self.embedding_cache = diskcache.Cache(embedding_file_path, eviction_policy = "none")
         self.datapoint_cache = diskcache.Cache(datapoint_file_path, eviction_policy = "none")
 
-        self.epoch_len = epoch_len
-
-        self.enum = [0 for i in range(epoch_len)]
-
         self.num_image = self.embedding_cache["num_image_for_training"]
         self.num_datapoints = self.datapoint_cache["num_datapoints_for_training"]
 
     def __len__(self):
-        return self.epoch_len
+        return self.num_datapoints
 
     def __getitem__(self, idx):
-        id = (self.enum[idx] * self.epoch_len + idx) % self.num_datapoints
-        self.enum[idx] += 1
         res = dict()
-        res["embedding"] = self.embedding_cache[("training", self.datapoint_cache[("training", id)]["image_id"])]["embedding"]
-        res["label"] = self.embedding_cache[("training", self.datapoint_cache[("training", id)]["image_id"])]["label"]
-        res["mask_cls"] = self.datapoint_cache[("training", id)]["mask_cls"]
-        res["prompt"] = self.datapoint_cache[("training", id)]["prompt_point"]
+        res["embedding"] = self.embedding_cache[("training", self.datapoint_cache[("training", idx)]["image_id"])]["embedding"]
+        res["label"] = self.embedding_cache[("training", self.datapoint_cache[("training", idx)]["image_id"])]["label"]
+        res["mask_cls"] = self.datapoint_cache[("training", idx)]["mask_cls"]
+        res["prompt"] = self.datapoint_cache[("training", idx)]["prompt_point"]
         return res 
 
     def __del__(self):
@@ -51,8 +44,7 @@ class ValidationDataset(Dataset):
     def __init__(self, *,
                     datapoint_file_path,
                     embedding_file_path,
-                    model_type='vit_h',
-                    epoch_len = 10
+                    model_type='vit_h'
                  ):   
         
         super().__init__()
@@ -62,8 +54,6 @@ class ValidationDataset(Dataset):
         self.embedding_cache = diskcache.Cache(embedding_file_path, eviction_policy = "none")
         self.datapoint_cache = diskcache.Cache(datapoint_file_path, eviction_policy = "none")
 
-        self.epoch_len = epoch_len
-
         self.num_image = self.embedding_cache["num_image_for_validation"]
         self.num_datapoints = self.datapoint_cache["num_datapoints_for_validation"]
 
@@ -71,12 +61,11 @@ class ValidationDataset(Dataset):
         return self.epoch_len
 
     def __getitem__(self, idx):
-        id = idx % self.num_datapoints
         res = dict()
-        res["embedding"] = self.embedding_cache[("validation", self.datapoint_cache[("validation", id)]["image_id"])]["embedding"]
-        res["label"] = self.embedding_cache[("validation", self.datapoint_cache[("validation", id)]["image_id"])]["label"]
-        res["mask_cls"] = self.datapoint_cache[("validation", id)]["mask_cls"]
-        res["prompt"] = self.datapoint_cache[("validation", id)]["prompt_point"]
+        res["embedding"] = self.embedding_cache[("validation", self.datapoint_cache[("validation", idx)]["image_id"])]["embedding"]
+        res["label"] = self.embedding_cache[("validation", self.datapoint_cache[("validation", idx)]["image_id"])]["label"]
+        res["mask_cls"] = self.datapoint_cache[("validation", idx)]["mask_cls"]
+        res["prompt"] = self.datapoint_cache[("validation", idx)]["prompt_point"]
         return res 
 
     def __del__(self):
@@ -90,16 +79,12 @@ class DataModule(pl.LightningDataModule):
                  embedding_file_path,
                  datapoint_file_path,
                  model_type: str = "vit_h",
-                 training_epoch_len: int = 10000,
-                 validation_epoch_len: int = 1000,
                  batch_size: int = 128,
                  debug: bool = False
                 ):
         super().__init__()
 
         self.model_type = model_type
-        self.training_epoch_len = training_epoch_len
-        self.validation_epoch_len = validation_epoch_len
         self.batch_size = batch_size
 
         # TODO: This will keep two copies of the encoder in memory. We should find a way to avoid this.
@@ -107,14 +92,12 @@ class DataModule(pl.LightningDataModule):
                 embedding_file_path=embedding_file_path,
                 datapoint_file_path=datapoint_file_path,
                 model_type=self.model_type,
-                epoch_len=self.training_epoch_len
             )
     
         self.validation_dataset = ValidationDataset(
             embedding_file_path=embedding_file_path,
             datapoint_file_path=datapoint_file_path,
             model_type=self.model_type,
-            epoch_len=self.validation_epoch_len
         )
         
 
@@ -123,7 +106,8 @@ class DataModule(pl.LightningDataModule):
         pass
 
     def train_dataloader(self):
-        return DataLoader(self.training_dataset, batch_size=self.batch_size, num_workers=5)
+        # Important: shuffle must be True, otherwise the training will be wrong.
+        return DataLoader(self.training_dataset, batch_size=self.batch_size, shuffle=True, num_workers=5)
 
     def val_dataloader(self):
         return DataLoader(self.validation_dataset, batch_size=self.batch_size, num_workers=5)

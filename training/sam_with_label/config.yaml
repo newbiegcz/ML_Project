@@ -9,6 +9,8 @@ fit:
     accelerator: gpu
     strategy: auto
     devices: auto
+    max_epochs: 400*
+    limit_train_batches: 0.01
     num_nodes: 1
     precision: 32-true
     callbacks:
@@ -17,7 +19,6 @@ fit:
           save_top_k: 10
           monitor: val_Dice/mDice
           mode: max
-    max_epochs: 400
     overfit_batches: 0
     check_val_every_n_epoch: 1
     log_every_n_steps: 10
@@ -57,8 +58,6 @@ fit:
     embedding_file_path: "/root/autodl-tmp/embeddings"
     datapoint_file_path: "/root/autodl-tmp/datapoints"
     model_type: "vit_h"
-    training_epoch_len: 2000
-    validation_epoch_len: 500
     batch_size: 64
     debug: False
 

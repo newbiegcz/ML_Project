@@ -24,7 +24,7 @@ class MyLightningCLI(LightningCLI):
         parser.link_arguments("model.debug", "data.debug")
 
 class MyTrainer(Trainer):
-    def __init__(self, wandb_config: Any, **kwargs):
+    def __init__(self, wandb_config: Any, train_epoch_len: int, **kwargs):
         logger = WandbLogger(**wandb_config)
         super().__init__(logger=logger, **kwargs)
 
