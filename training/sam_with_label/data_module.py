@@ -58,7 +58,7 @@ class ValidationDataset(Dataset):
         self.num_datapoints = self.datapoint_cache["num_datapoints_for_validation"]
 
     def __len__(self):
-        return self.epoch_len
+        return self.num_datapoints
 
     def __getitem__(self, idx):
         res = dict()
