@@ -54,18 +54,12 @@ fit:
       alpha: 0.25
       gamma: 2
     debug: false
-  # data:
-  #   embedding_file_path: "/root/autodl-tmp/embeddings"
-  #   datapoint_file_path: "/root/autodl-tmp/datapoints"
-  #   model_type: "vit_h"
-  #   batch_size: 64
-  #   num_workers: 4    # 在服务器应当调整
-  #   debug: False
   data:
-      embedding_file_path: "embedding_cache/embeddings"
-      datapoint_file_path: "embedding_cache/datapoints"
-      model_type: "vit_h"
-      batch_size: 64
-      aug_per_img: 7
-      total_aug_per_img: 10
+    embedding_file_path: "/root/autodl-tmp/embeddings"
+    datapoint_file_path: "/root/autodl-tmp/datapoints"
+    model_type: "vit_h"
+    batch_size: 64
+    num_workers: 4    # 在服务器应当调整
+    debug: False
+
   ckpt_path: null
