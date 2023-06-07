@@ -125,7 +125,7 @@ class LabelPredicter():
 
             print('reading data...')
             for i in range(h):
-                print('{}/{}'.format(i,h))
+                # print('{}/{}'.format(i,h))
                 data = {
                     "image": images[:, :, i],
                     "label": labels[:, :, i],
