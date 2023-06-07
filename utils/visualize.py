@@ -168,7 +168,7 @@ def pre_display_func_2d(image, pd_label, gt_label, prompt_points, label_name, ba
                 for point, t in prompt_points:
                     point = (int(point[0]), int(point[1]))
                     color = (0, 0, 1.0) if t else (1.0, 0, 0) # OpenCV: BGR
-                    image = cv2.circle(image, point, 10, color, -1)
+                    image = cv2.circle(image, point, 2, color, -1)
         
 
         for i in range(len(label_name)):
