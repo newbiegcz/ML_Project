@@ -82,6 +82,8 @@ class LabelPredicter():
         1. the predicted labels, with shape (num_slices, H, W)
         2. dice, with shape (13, )
         see code for more details
+
+        print the mean dice
         """
         # get file names
         files = load_decathlon_datalist(data_list_file_path, True, file_key)
@@ -112,6 +114,7 @@ class LabelPredicter():
         set_track_meta(False)
 
         # predict
+        dices = []
         for d in cache:
             file_path = d['image_meta_dict']['filename_or_obj']
             file_name = os.path.basename(file_path)
@@ -142,6 +145,7 @@ class LabelPredicter():
             print('predicting one...')
             labels, dice = self.predict_one(images_list, ground_truths_list)
             labels = np.array(labels)
+            dices.append(np.mean(dice))
             #print(labels.shape)
             #print(dice.shape)
             #print(dice)
@@ -151,5 +155,9 @@ class LabelPredicter():
                 os.mkdir('result')
             np.save(f'result/{file_name_without_extension}.npy', labels)
             np.save(f'result/{file_name_without_extension}_dice.npy', dice)
+        
+        # output mdice
+        print('mdice: {}'.format(np.mean(dices)))
+            
 
 
