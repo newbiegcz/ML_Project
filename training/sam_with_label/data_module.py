@@ -1,79 +1,8 @@
 import lightning.pytorch as pl
-from data.exp_dataset import ExpDataset
-from data.dataset import data_files
-import torch
-from torch.utils.data import Dataset
+
 from torch.utils.data import DataLoader
-import diskcache
+from data.cache_dataset import TrainDataset, ValidationDataset
 
-class TrainDataset(Dataset):
-
-    def __init__(self, *,
-                    datapoint_file_path,
-                    embedding_file_path,
-                    model_type='vit_h'
-                 ):   
-        
-        super().__init__()
-
-        self.model_type = model_type
-
-        self.embedding_cache = diskcache.Cache(embedding_file_path, eviction_policy = "none")
-        self.datapoint_cache = diskcache.Cache(datapoint_file_path, eviction_policy = "none")
-
-        self.num_image = self.embedding_cache["num_image_for_training"]
-        self.num_datapoints = self.datapoint_cache["num_datapoints_for_training"]
-
-    def __len__(self):
-        return self.num_datapoints
-
-    def __getitem__(self, idx):
-        res = dict()
-        res["embedding"] = self.embedding_cache[("training", self.datapoint_cache[("training", idx)]["image_id"])]["embedding"]
-        res["label"] = self.embedding_cache[("training", self.datapoint_cache[("training", idx)]["image_id"])]["label"]
-        res["mask_cls"] = self.datapoint_cache[("training", idx)]["mask_cls"]
-        res["prompt"] = self.datapoint_cache[("training", idx)]["prompt_point"]
-        return res 
-
-    def __del__(self):
-        self.embedding_cache.close()
-        self.datapoint_cache.close()
-
-class ValidationDataset(Dataset):
-
-    def __init__(self, *,
-                    datapoint_file_path,
-                    embedding_file_path,
-                    model_type='vit_h'
-                 ):   
-        
-        super().__init__()
-
-        self.model_type = model_type
-
-        self.embedding_cache = diskcache.Cache(embedding_file_path, eviction_policy = "none")
-        self.datapoint_cache = diskcache.Cache(datapoint_file_path, eviction_policy = "none")
-
-        self.num_image = self.embedding_cache["num_image_for_validation"]
-        self.num_datapoints = self.datapoint_cache["num_datapoints_for_validation"]
-
-    def __len__(self):
-        return self.num_datapoints
-
-    def __getitem__(self, idx):
-        res = dict()
-        res["embedding"] = self.embedding_cache[("validation", self.datapoint_cache[("validation", idx)]["image_id"])]["embedding"]
-        res["label"] = self.embedding_cache[("validation", self.datapoint_cache[("validation", idx)]["image_id"])]["label"]
-        res["mask_cls"] = self.datapoint_cache[("validation", idx)]["mask_cls"]
-        res["prompt"] = self.datapoint_cache[("validation", idx)]["prompt_point"]
-        return res 
-
-    def __del__(self):
-        self.embedding_cache.close()
-        self.datapoint_cache.close()
-
-
-# TODO: 在实现多进程训练时，setup 会被每个进程调用一次。应该考虑让所有进程共享一个 queue，而 workers 负责分配不同的数据生成任务.
 class DataModule(pl.LightningDataModule):
     def __init__(self, 
                  embedding_file_path: str,
