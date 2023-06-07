@@ -38,7 +38,7 @@ class SamAutomaticLabelGenerator():
         model: SamWithLabel,
         points_per_side: Optional[int] = 32,
         points_per_batch: int = 64,
-        pred_iou_thresh: float = 0.88,
+        pred_iou_thresh: float = 0.80,
         #stability_score_thresh: float = 0.95,
         stability_score_thresh: float = 0,
         stability_score_offset: float = 1.0,
@@ -134,6 +134,7 @@ class SamAutomaticLabelGenerator():
         self.min_mask_region_area = min_mask_region_area
         self.output_mode = output_mode
 
+    @torch.no_grad()
     def generate_labels(self, image : np.ndarray) -> np.ndarray:
         """
         Generates labels for the given image.
@@ -155,7 +156,7 @@ class SamAutomaticLabelGenerator():
             label = np.array(label_pred).argmax()
             labels[mask > 0] = label
             #tmp.append((mask, label_pred))
-        return labels
+        return labels#, tmp
 
     @torch.no_grad()
     def generate(self, image: np.ndarray) -> List[Dict[str, Any]]:
@@ -210,7 +211,7 @@ class SamAutomaticLabelGenerator():
         print('Writing mask records...')
         curr_anns = []
         for idx in range(len(mask_data["segmentations"])):
-            print('label prediction:', mask_data["label_preds"][idx])
+            # print('label prediction:', mask_data["label_preds"][idx])
             mask = mask_data["segmentations"][idx]
             np.savetxt('output.txt', mask, fmt='%d')
             ann = {
@@ -334,7 +335,15 @@ class SamAutomaticLabelGenerator():
         )
         del masks
 
-        print('Before filter by IoU:', len(data["masks"]))
+        print('Before filter:', len(data["masks"]))
+
+        # remove masks with predicted label = 0
+        keep_mask = data["label_preds"].argmax(dim = 1) > 0
+        #print('keep_mask shape:', keep_mask.shape)
+        data.filter(keep_mask)
+        print('After filter by label prediction:', len(data["masks"]))
+
+        #print('Before filter by IoU:', len(data["masks"]))
         print('IoU predictions:', data["iou_preds"])
 
         # Filter by predicted IoU
