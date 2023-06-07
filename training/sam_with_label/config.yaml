@@ -9,6 +9,8 @@ fit:
     accelerator: gpu
     strategy: auto
     devices: auto
+    max_epochs: 400
+    limit_train_batches: 0.05
     num_nodes: 1
     precision: 32-true
     callbacks:
@@ -16,8 +18,7 @@ fit:
         init_args:
           save_top_k: 10
           monitor: val_Dice/mDice
-          mode: min
-    max_epochs: 20
+          mode: max
     overfit_batches: 0
     check_val_every_n_epoch: 1
     log_every_n_steps: 10
@@ -40,11 +41,11 @@ fit:
     train_prompt_encoder: true
     dice_loss_coef: 0.05
     focal_loss_coef: 1
-    label_loss_coef: 0.3
+    label_loss_coef: 0.01
     iou_loss_coef: 0.5
     optimizer_type: AdamW
     optimizer_kwargs:
-      lr: 0.00001
+      lr: 0.0001
       weight_decay: 0.1
     dice_loss_params:
       p: 1
@@ -54,16 +55,11 @@ fit:
       gamma: 2
     debug: false
   data:
-    training_epoch_len: 20000
-    validation_epoch_len: 20000
-    chunk_size: 64
-    batch_size: 32
-    delay: 512
-    encoder_batch_size: 1
-    encoder_device: 'cuda:0'
-    cache_path: embedding_cache
-    cache_size_limit: 10737418240
-    seed: 1166117
-    augment_training_data: true
-    augment_validation_data: true
+    embedding_file_path: "/root/autodl-tmp/embeddings"
+    datapoint_file_path: "/root/autodl-tmp/datapoints"
+    model_type: "vit_h"
+    batch_size: 64
+    num_workers: 4    # 在服务器应当调整
+    debug: False
+
   ckpt_path: null
