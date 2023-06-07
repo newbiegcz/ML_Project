@@ -38,7 +38,8 @@ class SamAutomaticLabelGenerator():
         model: SamWithLabel,
         points_per_side: Optional[int] = 32,
         points_per_batch: int = 64,
-        pred_iou_thresh: float = 0.80,
+        pred_iou_thresh: float = 0.60,
+        label_certainty_thresh: float = 0.70,
         #stability_score_thresh: float = 0.95,
         stability_score_thresh: float = 0,
         stability_score_offset: float = 1.0,
@@ -67,6 +68,8 @@ class SamAutomaticLabelGenerator():
             by the model. Higher numbers may be faster but use more GPU memory.
           pred_iou_thresh (float): A filtering threshold in [0,1], using the
             model's predicted mask quality.
+          label_certainty_thresh (float): A filtering threshold in [0,1], using
+            the maximum predicted label probability to filter masks.
           stability_score_thresh (float): A filtering threshold in [0,1], using
             the stability of the mask under changes to the cutoff used to binarize
             the model's mask predictions.
@@ -124,6 +127,7 @@ class SamAutomaticLabelGenerator():
         self.predictor = SamWithLabelPredictor(model)
         self.points_per_batch = points_per_batch
         self.pred_iou_thresh = pred_iou_thresh
+        self.label_certainty_thresh = label_certainty_thresh
         self.stability_score_thresh = stability_score_thresh
         self.stability_score_offset = stability_score_offset
         self.box_nms_thresh = box_nms_thresh
@@ -149,11 +153,19 @@ class SamAutomaticLabelGenerator():
         print('generating labels...')
         masks = self.generate(image)
         labels = np.zeros(image.shape[:2], dtype=np.uint8)
+
+        idxs = list(range(len(masks)))
+        idxs.sort(key=lambda x : masks[x]["predicted_iou"], reverse=True)
+
         #tmp = []
-        for idx in range(len(masks)):
+        vis = {}
+        for idx in idxs:
             mask = masks[idx]["segmentation"]
             label_pred = masks[idx]["label"]
             label = np.array(label_pred).argmax()
+            if int (label) in vis:
+                continue
+            vis[int (label)] = True
             labels[mask > 0] = label
             #tmp.append((mask, label_pred))
         return labels#, tmp
@@ -342,6 +354,12 @@ class SamAutomaticLabelGenerator():
         #print('keep_mask shape:', keep_mask.shape)
         data.filter(keep_mask)
         print('After filter by label prediction:', len(data["masks"]))
+
+        if self.label_certainty_thresh > 0.0:
+            prob = torch.nn.functional.softmax(data["label_preds"], dim=1)
+            label = data["label_preds"].argmax(dim=1)
+            keep_mask = prob[torch.arange(len(label)), label] > self.label_certainty_thresh
+            data.filter(keep_mask)
 
         #print('Before filter by IoU:', len(data["masks"]))
         print('IoU predictions:', data["iou_preds"])

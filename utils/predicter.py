@@ -54,7 +54,7 @@ class LabelPredicter():
         """
         res = []
         intersection = np.zeros(13,dtype=np.uint64)
-        union = np.zeros(13,dtype=np.uint64)
+        div = np.zeros(13,dtype=np.uint64)
         for (image, ground_truth) in tqdm(zip(images, ground_truths), desc="slice"):
             labels = self.automatic_label_generator.generate_labels(image)
             res.append(labels)
@@ -62,11 +62,11 @@ class LabelPredicter():
                 prediction_mask = labels == (i+1)
                 ground_truth_mask = ground_truth == (i+1)
                 intersection[i] += 2 * np.sum(prediction_mask & ground_truth_mask)
-                union[i] += np.sum(prediction_mask) + np.sum(ground_truth_mask)
+                div[i] += np.sum(prediction_mask) + np.sum(ground_truth_mask)
         dice = np.zeros(13, dtype=np.float64)
         for i in range(13):
-            if union[i] != 0:
-                dice[i] = intersection[i] / union[i]
+            if div[i] != 0:
+                dice[i] = intersection[i] / div[i]
         return res, dice
     
     def predict(self, file_key = 'validation', data_list_file_path = 'raw_data/dataset_0.json'):
