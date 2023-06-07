@@ -98,6 +98,7 @@ class Dataset2D(data.Dataset):
             files = files.copy()[:1]
 
         self.files = files
+        print(files)
         self.device = device
         self.transform = transform
         set_track_meta(True)
@@ -133,6 +134,7 @@ class Dataset2D(data.Dataset):
 
         self.data_list = []
         for d in self.cache:
+            print(d['image_meta_dict']['filename_or_obj']) ## raw_data\imagesTr\img0035.nii.gz
             img, label = d['image'][0], d['label'][0]
             h = img.shape[2]
             for i in range(h):
@@ -147,8 +149,12 @@ class Dataset2D(data.Dataset):
 
     def __getitem__(self, idx):
         ret = self.data_list[idx].copy()
+        #print('image shape:', ret['image'].shape)
+        #print('label shape:', ret['label'].shape)
         if self.transform:
-            return self.transform(ret)
+            t = self.transform(ret)
+            #print(t['image'].shape, t['label'].shape)
+            return t
         else:
             return ret
     
