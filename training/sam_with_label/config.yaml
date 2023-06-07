@@ -62,10 +62,10 @@ fit:
   #   num_workers: 4    # 在服务器应当调整
   #   debug: False
   data:
-      embedding_file_path: "embedding_cache/embeddings"
-      datapoint_file_path: "embedding_cache/datapoints"
+      embedding_file_path: "/root/autodl-tmp/embeddings"
+      datapoint_file_path: "/root/autodl-tmp/datapoints"
       model_type: "vit_h"
-      batch_size: 64
-      aug_per_img: 7
+      batch_size: 128
+      aug_per_img: 1
       total_aug_per_img: 10
   ckpt_path: null

@@ -1,6 +1,7 @@
 from modeling.sam import SamWithLabel
 import numpy as np
 from typing import List, Tuple
+from tqdm import tqdm
 from utils.automatic_label_generator import SamAutomaticLabelGenerator
 from monai.transforms import (
     Compose,
@@ -54,7 +55,7 @@ class LabelPredicter():
         res = []
         intersection = np.zeros(13,dtype=np.uint64)
         union = np.zeros(13,dtype=np.uint64)
-        for (image, ground_truth) in zip(images, ground_truths):
+        for (image, ground_truth) in tqdm(zip(images, ground_truths), desc="slice"):
             labels = self.automatic_label_generator.generate_labels(image)
             res.append(labels)
             for i in range(13):
@@ -115,7 +116,7 @@ class LabelPredicter():
 
         # predict
         dices = []
-        for d in cache:
+        for d in tqdm(cache, desc="CT"):
             file_path = d['image_meta_dict']['filename_or_obj']
             file_name = os.path.basename(file_path)
             index_of_dot = file_name.index('.')
