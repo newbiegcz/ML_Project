@@ -40,10 +40,16 @@ class MemoryDataModule(pl.LightningDataModule):
         # TODO: 这部分不多进程也太慢了..得类似 torch data iter 搞搞
         for i in tqdm(range(_train_dataset.num_image)):
             if i % self.total_aug_per_img < self.aug_per_img:
-               self.train_image_cache[i] = _train_dataset.embedding_cache[("training", i)]
+                self.train_image_cache[i] = _train_dataset.embedding_cache[("training", i)]
+                #import sys
+                for k in self.train_image_cache[i].keys():
+                    self.train_image_cache[i][k] = self.train_image_cache[i][k].clone()
+                    #print(k, sys.getsizeof(v.clone().storage()), v.shape, v.dtype, v.grad)
 
         for i in tqdm(range(_validation_dataset.num_image)):
             self.val_image_cache[i] = _validation_dataset.embedding_cache[("validation", i)]
+                for k in self.val_image_cache[i].keys():
+                    self.val_image_cache[i][k] = self.val_image_cache[i][k].clone()
 
         self.train_datapoints = []
         self.val_datapoints = []
