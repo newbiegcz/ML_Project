@@ -31,7 +31,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-      name: with label loss
+      name: Exp1
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -65,7 +65,7 @@ fit:
       embedding_file_path: "/root/autodl-tmp/embeddings"
       datapoint_file_path: "/root/autodl-tmp/datapoints"
       model_type: "vit_h"
-      batch_size: 128
-      aug_per_img: 1
+      batch_size: 64
+      aug_per_img: 7
       total_aug_per_img: 10
   ckpt_path: null

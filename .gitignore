@@ -198,3 +198,4 @@ imgui.ini
 /experiment_logs/
 /processed_data/
 /extracted.pth
+/result/
