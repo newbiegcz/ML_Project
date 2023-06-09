@@ -91,6 +91,10 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         embeddings = batch['embedding']
 
         batch = batch.copy()
+        batch['prompt'] = torch.cat((batch['prompt'][0].reshape(-1, 1), batch['prompt'][1].reshape(-1, 1)), dim=1)
+
+        point_coords = batch['prompt'][:, None, :]
+        point_labels = torch.ones((B, 1), dtype=torch.int, device=self.device)
 
         with torch.set_grad_enabled(torch.is_grad_enabled() and self.train_prompt_encoder):
             sparse_embeddings, dense_embeddings = self.model.prompt_encoder(
