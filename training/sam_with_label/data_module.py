@@ -1,120 +1,137 @@
 import lightning.pytorch as pl
-from data.exp_dataset import ExpDataset
-from data.dataset import data_files
-import torch
-from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
-import diskcache
 
-class TrainDataset(Dataset):
+from torch.utils.data import DataLoader, Dataset
+from data.cache_dataset import TrainDataset, ValidationDataset
+from tqdm import tqdm
 
-    def __init__(self, *,
-                    datapoint_file_path,
-                    embedding_file_path,
-                    model_type='vit_h',
-                    epoch_len = 10
-                 ):   
-        
-        super().__init__()
-
-        self.model_type = model_type
-
-        self.embedding_cache = diskcache.Cache(embedding_file_path, eviction_policy = "none")
-        self.datapoint_cache = diskcache.Cache(datapoint_file_path, eviction_policy = "none")
-
-        self.epoch_len = epoch_len
-
-        self.enum = [0 for i in range(epoch_len)]
-
-        self.num_image = self.embedding_cache["num_image_for_training"]
-        self.num_datapoints = self.datapoint_cache["num_datapoints_for_training"]
-
-    def __len__(self):
-        return self.epoch_len
-
-    def __getitem__(self, idx):
-        id = (self.enum[idx] * self.epoch_len + idx) % self.num_datapoints
-        self.enum[idx] += 1
-        res = dict()
-        res["embedding"] = self.embedding_cache[("training", self.datapoint_cache[("training", id)]["image_id"])]["embedding"]
-        res["label"] = self.embedding_cache[("training", self.datapoint_cache[("training", id)]["image_id"])]["label"]
-        res["mask_cls"] = self.datapoint_cache[("training", id)]["mask_cls"]
-        res["prompt"] = self.datapoint_cache[("training", id)]["prompt_point"]
-        return res 
-
-    def __del__(self):
-        self.embedding_cache.close()
-        self.datapoint_cache.close()
-
-class ValidationDataset(Dataset):
-
-    def __init__(self, *,
-                    datapoint_file_path,
-                    embedding_file_path,
-                    model_type='vit_h',
-                    epoch_len = 10
-                 ):   
-        
-        super().__init__()
-
-        self.model_type = model_type
-
-        self.embedding_cache = diskcache.Cache(embedding_file_path, eviction_policy = "none")
-        self.datapoint_cache = diskcache.Cache(datapoint_file_path, eviction_policy = "none")
-
-        self.epoch_len = epoch_len
-
-        self.num_image = self.embedding_cache["num_image_for_validation"]
-        self.num_datapoints = self.datapoint_cache["num_datapoints_for_validation"]
-
-    def __len__(self):
-        return self.epoch_len
-
-    def __getitem__(self, idx):
-        id = idx % self.num_datapoints
-        res = dict()
-        res["embedding"] = self.embedding_cache[("validation", self.datapoint_cache[("validation", id)]["image_id"])]["embedding"]
-        res["label"] = self.embedding_cache[("validation", self.datapoint_cache[("validation", id)]["image_id"])]["label"]
-        res["mask_cls"] = self.datapoint_cache[("validation", id)]["mask_cls"]
-        res["prompt"] = self.datapoint_cache[("validation", id)]["prompt_point"]
-        return res 
-
-    def __del__(self):
-        self.embedding_cache.close()
-        self.datapoint_cache.close()
-
-
-# TODO: 在实现多进程训练时，setup 会被每个进程调用一次。应该考虑让所有进程共享一个 queue，而 workers 负责分配不同的数据生成任务.
-class DataModule(pl.LightningDataModule):
+# 分布式训练时，每个进程应当只加载自己负责的部分
+class MemoryDataModule(pl.LightningDataModule):
     def __init__(self, 
-                 embedding_file_path,
-                 datapoint_file_path,
+                 embedding_file_path: str,
+                 datapoint_file_path: str,
                  model_type: str = "vit_h",
-                 training_epoch_len: int = 10000,
-                 validation_epoch_len: int = 1000,
                  batch_size: int = 128,
+                 aug_per_img: int = 10,
+                 total_aug_per_img: int = 10,
                  debug: bool = False
                 ):
         super().__init__()
 
         self.model_type = model_type
-        self.training_epoch_len = training_epoch_len
-        self.validation_epoch_len = validation_epoch_len
         self.batch_size = batch_size
+        self.aug_per_img = aug_per_img
+        self.total_aug_per_img = total_aug_per_img
 
-        # TODO: This will keep two copies of the encoder in memory. We should find a way to avoid this.
+        _train_dataset = TrainDataset(
+                embedding_file_path=embedding_file_path,
+                datapoint_file_path=datapoint_file_path,
+                model_type=self.model_type,
+            )
+    
+        _validation_dataset = ValidationDataset(
+            embedding_file_path=embedding_file_path,
+            datapoint_file_path=datapoint_file_path,
+            model_type=self.model_type,
+        )
+
+        self.train_image_cache = {}
+        self.val_image_cache = {}
+
+        # TODO: 这部分不多进程也太慢了..得类似 torch data iter 搞搞
+        for i in tqdm(range(_train_dataset.num_image)):
+            if i % self.total_aug_per_img < self.aug_per_img:
+                self.train_image_cache[i] = _train_dataset.embedding_cache[("training", i)]
+                #import sys
+                for k in self.train_image_cache[i].keys():
+                    self.train_image_cache[i][k] = self.train_image_cache[i][k].clone()
+                    #print(k, sys.getsizeof(v.clone().storage()), v.shape, v.dtype, v.grad)
+
+        for i in tqdm(range(_validation_dataset.num_image)):
+            self.val_image_cache[i] = _validation_dataset.embedding_cache[("validation", i)]
+                for k in self.val_image_cache[i].keys():
+                    self.val_image_cache[i][k] = self.val_image_cache[i][k].clone()
+
+        self.train_datapoints = []
+        self.val_datapoints = []
+        for i in tqdm(range(_train_dataset.num_datapoints)):
+            datapoint = _train_dataset.datapoint_cache[("training", i)]
+            image_id = datapoint["image_id"]
+            if image_id in self.train_image_cache:
+                self.train_datapoints.append(datapoint)
+        
+        for i in tqdm(range(_validation_dataset.num_datapoints)):
+            datapoint = _validation_dataset.datapoint_cache[("validation", i)]
+            image_id = datapoint["image_id"]
+            if image_id in self.val_image_cache:
+                self.val_datapoints.append(datapoint)
+
+        class _Dataset(Dataset):
+            def __init__(self, image_cache, datapoints):
+                super().__init__()
+                self.image_cache = image_cache
+                self.datapoints = datapoints
+            def __len__(self):
+                return len(self.datapoints)
+            def __getitem__(self, idx):
+                res = dict()
+                img_id = self.datapoints[idx]["image_id"]
+                res["embedding"] = self.image_cache[img_id]["embedding"]
+                res["label"] = self.image_cache[img_id]["label"]
+                res["mask_cls"] = self.datapoints[idx]["mask_cls"]
+                res["prompt"] = self.datapoints[idx]["prompt_point"]
+                return res
+            
+        self.training_dataset = _Dataset(self.train_image_cache, self.train_datapoints)
+        self.validation_dataset = _Dataset(self.val_image_cache, self.val_datapoints)
+
+    def setup(self, stage: str):
+        # this is only called once on each process
+        pass
+
+    def train_dataloader(self):
+        # num_workers must be 0
+        # Important: shuffle must be True, otherwise the training will be wrong.
+        return DataLoader(self.training_dataset, batch_size=self.batch_size, shuffle=True, num_workers=0, pin_memory=True)
+
+    def val_dataloader(self):
+        # num_workers must be 0
+        return DataLoader(self.validation_dataset, batch_size=self.batch_size, num_workers=0, pin_memory=True)
+
+    def test_dataloader(self):
+        return None
+
+    def predict_dataloader(self):
+        return None
+
+    def teardown(self, stage: str):
+        # Used to clean-up when the run is finished
+        pass
+
+class DiskDataModule(pl.LightningDataModule):
+    def __init__(self, 
+                 embedding_file_path: str,
+                 datapoint_file_path: str,
+                 model_type: str = "vit_h",
+                 batch_size: int = 128,
+                 num_workers: int = 4,
+                 debug: bool = False
+                ):
+        super().__init__()
+
+        self.model_type = model_type
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+
         self.training_dataset = TrainDataset(
                 embedding_file_path=embedding_file_path,
                 datapoint_file_path=datapoint_file_path,
                 model_type=self.model_type,
-                epoch_len=self.training_epoch_len
             )
     
         self.validation_dataset = ValidationDataset(
             embedding_file_path=embedding_file_path,
             datapoint_file_path=datapoint_file_path,
             model_type=self.model_type,
-            epoch_len=self.validation_epoch_len
         )
         
 
@@ -123,10 +140,11 @@ class DataModule(pl.LightningDataModule):
         pass
 
     def train_dataloader(self):
-        return DataLoader(self.training_dataset, batch_size=self.batch_size, num_workers=5)
+        # Important: shuffle must be True, otherwise the training will be wrong.
+        return DataLoader(self.training_dataset, batch_size=self.batch_size, shuffle=True, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return DataLoader(self.validation_dataset, batch_size=self.batch_size, num_workers=5)
+        return DataLoader(self.validation_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
 
     def test_dataloader(self):
         return None

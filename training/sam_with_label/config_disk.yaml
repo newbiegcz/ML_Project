@@ -31,7 +31,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-      name: Exp1
+      name: with label loss
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -54,18 +54,12 @@ fit:
       alpha: 0.25
       gamma: 2
     debug: false
-  # data:
-  #   embedding_file_path: "/root/autodl-tmp/embeddings"
-  #   datapoint_file_path: "/root/autodl-tmp/datapoints"
-  #   model_type: "vit_h"
-  #   batch_size: 64
-  #   num_workers: 4    # 在服务器应当调整
-  #   debug: False
   data:
-      embedding_file_path: "/root/autodl-tmp/embeddings"
-      datapoint_file_path: "/root/autodl-tmp/datapoints"
-      model_type: "vit_h"
-      batch_size: 64
-      aug_per_img: 7
-      total_aug_per_img: 10
+    embedding_file_path: "/root/autodl-tmp/embeddings"
+    datapoint_file_path: "/root/autodl-tmp/datapoints"
+    model_type: "vit_h"
+    batch_size: 64
+    num_workers: 4    # 在服务器应当调整
+    debug: False
+
   ckpt_path: null
