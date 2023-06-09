@@ -1,8 +1,9 @@
 import lightning.pytorch as pl
 
 from torch.utils.data import DataLoader, Dataset
-from data.cache_dataset import TrainDataset, ValidationDataset
+from data.cache_dataset import DiskCacheDataset
 from tqdm import tqdm
+import diskcache
 
 # 分布式训练时，每个进程应当只加载自己负责的部分
 class MemoryDataModule(pl.LightningDataModule):
@@ -22,13 +23,13 @@ class MemoryDataModule(pl.LightningDataModule):
         self.aug_per_img = aug_per_img
         self.total_aug_per_img = total_aug_per_img
 
-        _train_dataset = TrainDataset(
+        _train_dataset = DiskCacheDataset(
                 embedding_file_path=embedding_file_path,
                 datapoint_file_path=datapoint_file_path,
                 model_type=self.model_type,
             )
     
-        _validation_dataset = ValidationDataset(
+        _validation_dataset = DiskCacheDataset(
             embedding_file_path=embedding_file_path,
             datapoint_file_path=datapoint_file_path,
             model_type=self.model_type,
@@ -48,8 +49,8 @@ class MemoryDataModule(pl.LightningDataModule):
 
         for i in tqdm(range(_validation_dataset.num_image)):
             self.val_image_cache[i] = _validation_dataset.embedding_cache[("validation", i)]
-                for k in self.val_image_cache[i].keys():
-                    self.val_image_cache[i][k] = self.val_image_cache[i][k].clone()
+            for k in self.val_image_cache[i].keys():
+                self.val_image_cache[i][k] = self.val_image_cache[i][k].clone()
 
         self.train_datapoints = []
         self.val_datapoints = []
@@ -122,17 +123,22 @@ class DiskDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
 
-        self.training_dataset = TrainDataset(
-                embedding_file_path=embedding_file_path,
-                datapoint_file_path=datapoint_file_path,
+        self.embedding_cache = diskcache.Cache(embedding_file_path, eviction_policy = "none")
+        self.datapoint_cache = diskcache.Cache(datapoint_file_path, eviction_policy = "none")
+
+        self.training_dataset = DiskCacheDataset(
+                embedding_cache=self.embedding_cache,
+                datapoint_cache=self.datapoint_cache,
                 model_type=self.model_type,
+                key="training",
             )
     
-        self.validation_dataset = ValidationDataset(
-            embedding_file_path=embedding_file_path,
-            datapoint_file_path=datapoint_file_path,
-            model_type=self.model_type,
-        )
+        self.validation_dataset = DiskCacheDataset(
+                embedding_cache=self.embedding_cache,
+                datapoint_cache=self.datapoint_cache,
+                model_type=self.model_type,
+                key="validation",
+            )
         
 
     def setup(self, stage: str):
