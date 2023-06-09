@@ -43,8 +43,8 @@ embedding_disk_path = "/root/autodl-tmp/embeddings"
 
 size_threshold_in_bytes= 400 * 1024 * 1024 * 1024 # 200 GB
 debug = False
-times = 10 # The number of times to augment an image
-datapoints_for_training = 1000000 # The number of datapoints to use for training
+times = 20 # The number of times to augment an image
+datapoints_for_training = 3000000 # The number of datapoints to use for training
 datapoints_for_validation = 10000 # The number of datapoints to use for validation
 min_pixels = 5
 
@@ -220,9 +220,9 @@ for i in tqdm(range(len(raw_dataset_training))):
 
             for k in range(batch_size):
                 cur = dict()
-                cur["embedding"] = embeddings[k]
-                cur["low_res_image"] = torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean
-                cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8)
+                cur["embedding"] = embeddings[k].clone()
+                cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
+                cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
                 image_cache[("training", num_image_training + k)] = cur
     
             num_image_training += batch_size
@@ -256,9 +256,9 @@ for i in tqdm(range(len(raw_dataset_validation))):
 
         for k in range(batch_size):
             cur = dict()
-            cur["embedding"] = embeddings[k]
-            cur["low_res_image"] = torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean
-            cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8)
+            cur["embedding"] = embeddings[k].clone()
+            cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
+            cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
             image_cache[("validation", num_image_validation + k)] = cur
     
         num_image_validation += batch_size
