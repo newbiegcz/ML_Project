@@ -38,14 +38,14 @@ from data.dataset import data_files
 from tqdm import tqdm
 
 checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
-datapoints_disk_path = "/root/autodl-tmp/datapoints"
-embedding_disk_path = "/root/autodl-tmp/embeddings"
+datapoints_disk_path = "processed_data/datapoints"
+embedding_disk_path = "processed_data/embeddings"
 
 size_threshold_in_bytes= 400 * 1024 * 1024 * 1024 # 200 GB
 debug = False
-times = 10 # The number of times to augment an image
-datapoints_for_training = 1000000 # The number of datapoints to use for training
-datapoints_for_validation = 10000 # The number of datapoints to use for validation
+times = 2 # The number of times to augment an image
+datapoints_for_training = 1000 # The number of datapoints to use for training
+datapoints_for_validation = 100 # The number of datapoints to use for validation
 min_pixels = 5
 
 
@@ -53,7 +53,7 @@ datapoints_cache = diskcache.Cache(datapoints_disk_path, eviction_policy = "none
 image_cache = diskcache.Cache(embedding_disk_path, eviction_policy = "none")
 
 encoder = build_pretrained_encoder("vit_h", eval=True)
-encoder.to("cuda")
+#encoder.to("cuda")
 
 all_cmaps = plt.colormaps()
 exclude = ['flag', 'prism', 'ocean', 'gist_earth', 'terrain',
@@ -181,10 +181,12 @@ transform_2d_for_validation = (
 
 seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
-data_files_training = data_files["training"]
-data_files_validation = data_files["validation"]
+data_files_training = data_files["training"][:1]
+data_files_validation = data_files["validation"][:1]
 raw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 raw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
+raw_dataset_validation = raw_dataset_validation[40 : 42]
+raw_dataset_training = raw_dataset_training[40 : 42]
 
 def gen_training(idx):
     image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
@@ -201,7 +203,7 @@ def gen_validation(idx):
 print("doing image encoding for training...")
 import torch.nn.functional
 
-batch_size = 4
+batch_size = 1
 
 img_list = []
 label_list = []
@@ -216,13 +218,13 @@ for i in tqdm(range(len(raw_dataset_training))):
             img = torch.stack(img_list)
 
             with torch.inference_mode():
-                embeddings = encoder(img.cuda()).cpu()
+                embeddings = encoder(img)
 
             for k in range(batch_size):
                 cur = dict()
-                cur["embedding"] = embeddings[k]
-                cur["low_res_image"] = torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean
-                cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8)
+                cur["embedding"] = embeddings[k].clone()
+                cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
+                cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
                 image_cache[("training", num_image_training + k)] = cur
     
             num_image_training += batch_size
@@ -252,13 +254,13 @@ for i in tqdm(range(len(raw_dataset_validation))):
         img = torch.stack(img_list)
 
         with torch.inference_mode():
-            embeddings = encoder(img.cuda()).cpu()
+            embeddings = encoder(img)
 
         for k in range(batch_size):
             cur = dict()
-            cur["embedding"] = embeddings[k]
-            cur["low_res_image"] = torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean
-            cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8)
+            cur["embedding"] = embeddings[k].clone()
+            cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
+            cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
             image_cache[("validation", num_image_validation + k)] = cur
     
         num_image_validation += batch_size

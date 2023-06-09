@@ -141,6 +141,7 @@ class Dataset2D(data.Dataset):
                     "label": label[:, :, i],
                     "h": i / h
                 })
+            print(img.shape)
 
     def __len__(self):
         return len(self.data_list)
