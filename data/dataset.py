@@ -26,7 +26,7 @@ from monai.transforms import (
 # TODO: 考虑 cache encoder 的结果
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-data_dir = "raw_data/"
+data_dir = "/root/autodl-tmp/raw_data/"
 split_json = "dataset_0.json"
 
 datasets = data_dir + split_json
@@ -93,7 +93,7 @@ transforms = {
 }
 
 class Dataset2D(data.Dataset):
-    def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, compress = False):
+    def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, compress=False):
         if first_only:
             files = files.copy()[:1]
 
@@ -109,7 +109,7 @@ class Dataset2D(data.Dataset):
                     CropForegroundd(keys=["image", "label"], source_key="image", dtype=dtype),
                     Orientationd(keys=["image", "label"], axcodes="RAS"),
                     EnsureTyped(keys=["image", "label"], device=self.device, track_meta=False, dtype=dtype),
-                    Spacingd(keys=["image", "label"],pixdim=(1.0, 1.0, 2.0),mode=("bilinear", "nearest"))
+                    Spacingd(keys=["image", "label"],pixdim=(1.0, 1.0, 2.0),mode=("bilinear", "nearest")),
                 ]
             )
         else:
@@ -133,8 +133,10 @@ class Dataset2D(data.Dataset):
 
         self.data_list = []
         for d in self.cache:
+            # print(d['image_meta_dict']['filename_or_obj']) ## raw_data\imagesTr\img0035.nii.gz
             img, label = d['image'][0], d['label'][0]
             h = img.shape[2]
+            # print(compress, img.shape)
             for i in range(h):
                 self.data_list.append({
                     "image": img[:, :, i],
@@ -148,8 +150,12 @@ class Dataset2D(data.Dataset):
 
     def __getitem__(self, idx):
         ret = self.data_list[idx].copy()
+        #print('image shape:', ret['image'].shape)
+        #print('label shape:', ret['label'].shape)
         if self.transform:
-            return self.transform(ret)
+            t = self.transform(ret)
+            #print(t['image'].shape, t['label'].shape)
+            return t
         else:
             return ret
     

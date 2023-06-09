@@ -3,7 +3,7 @@ from lightning.pytorch import Trainer
 import lightning.pytorch as pl
 from lightning.pytorch.cli import LightningCLI
 from training.sam_with_label.model_module import SAMWithLabelModule
-from training.sam_with_label.data_module import DataModule
+from training.sam_with_label.data_module import DiskDataModule, MemoryDataModule
 from lightning.pytorch.loggers.wandb import WandbLogger
 import torch.multiprocessing as multiprocessing
 
@@ -29,7 +29,7 @@ class MyTrainer(Trainer):
         super().__init__(logger=logger, **kwargs)
 
 def cli_main():
-    cli = MyLightningCLI(SAMWithLabelModule, DataModule,
+    cli = MyLightningCLI(SAMWithLabelModule, MemoryDataModule,
         trainer_class=MyTrainer,
         parser_kwargs={
             "default_config_files": ["training/sam_with_label/config.yaml"],   
