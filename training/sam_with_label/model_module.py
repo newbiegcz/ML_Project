@@ -62,6 +62,7 @@ class SAMWithLabelModule(pl.LightningModule):
                  label_loss_coef: float = 1.0,
                  iou_loss_coef: float = 1.0,
                  optimizer_type: str = "AdamW",
+                 model_kwargs: dict = {},
                  optimizer_kwargs: dict = {
                     "lr": 1e-5,
                     "weight_decay": 0.1,
@@ -93,6 +94,7 @@ class SAMWithLabelModule(pl.LightningModule):
 
         self.pretrained_checkpoint = pretrained_checkpoints[model_type]
         self.model_type = model_type
+        self.model_kwargs = model_kwargs
         self.train_image_encoder = train_image_encoder
         self.train_prompt_encoder = train_prompt_encoder
         self.dice_loss_coef = dice_loss_coef
@@ -103,7 +105,7 @@ class SAMWithLabelModule(pl.LightningModule):
         self.optimizer_kwargs = optimizer_kwargs
         self.debug = debug
         
-        self.model, self.encoder_builder  = sam_with_label_model_registry[model_type](None, train_image_encoder)
+        self.model, self.encoder_builder  = sam_with_label_model_registry[model_type](None, train_image_encoder, **model_kwargs)
         pretrained_sam = sam_model_registry[model_type](self.pretrained_checkpoint)
         pretrained_state_dict = pretrained_sam.state_dict()
         new_state_dict = self.model.state_dict()

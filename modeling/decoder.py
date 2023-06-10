@@ -16,12 +16,19 @@ class MaskLabelDecoder(MaskDecoder):
         label_head_hidden_dim,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        assert "num_multimask_outputs" not in kwargs, "num_multimask_outputs is not supported"
+        super().__init__(num_multimask_outputs=14 - 1, **kwargs) # 会被 + 1
+        del self.num_multimask_outputs # 避免混淆
+
         self.label_head_depth = label_head_depth
         self.label_head_depth_dim = label_head_hidden_dim
 
+        # TODO: 尝试合并 label head 的 MLP
+        # TODO: 试着调整全连接层 hidden 大小
+        # TODO: 试着使用原本的多个 output token
+        # TODO: 确定只用一个 token 输出 label 的结果..? 
+
         self.label_token = nn.Embedding(1, self.transformer_dim)
-        # TODO: 这样写太 naive 了.. 记得改掉 
         self.label_prediction_head = MLP(
             self.transformer_dim, label_head_hidden_dim, 14, label_head_depth
         )
@@ -32,7 +39,6 @@ class MaskLabelDecoder(MaskDecoder):
         image_pe: torch.Tensor,
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
-        multimask_output: bool,
         already_unfolded = False
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         masks, iou_pred, label_pred = self.predict_masks(
@@ -43,13 +49,8 @@ class MaskLabelDecoder(MaskDecoder):
             already_unfolded=already_unfolded
         )
 
-        # Select the correct mask or masks for output
-        if multimask_output:
-            mask_slice = slice(1, None)
-        else:
-            mask_slice = slice(0, 1)
-        masks = masks[:, mask_slice, :, :]
-        iou_pred = iou_pred[:, mask_slice]
+        masks = masks[:, :, :, :]
+        iou_pred = iou_pred[:, :]
         label_pred = label_pred.reshape(
                 label_pred.shape[0], 14
             )
