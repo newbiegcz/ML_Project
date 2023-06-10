@@ -10,7 +10,7 @@ fit:
     strategy: auto
     devices: auto
     max_epochs: 400
-    limit_train_batches: 0.001
+    limit_train_batches: 0.005
     num_nodes: 1
     precision: 32-true
     callbacks:
@@ -41,8 +41,10 @@ fit:
     train_prompt_encoder: true
     dice_loss_coef: 0.05
     focal_loss_coef: 1
-    label_loss_coef: 0.01
-    iou_loss_coef: 0.5
+    label_loss_coef: 0.1 # 较大的值
+    iou_loss_coef: 1.0
+    label_weight: [15078195, 116341, 75482, 63875, 3124, 5738, 649173, 174449, 28613, 34208, 16374, 42481, 1623, 2164]
+    model_kwargs: {}
     optimizer_type: AdamW
     optimizer_kwargs:
       lr: 0.0001
