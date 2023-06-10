@@ -38,8 +38,6 @@ class DiceMetric():
     @torch.no_grad()
     def get_metrics(self, ignore_background=True):
         avg_dice = self.sum_dice / self.n_samples
-        if (avg_dice != avg_dice).any():
-            print("Warning: nan in avg_dice")
         if ignore_background:
             avg_dice[0] = torch.nan
         mdice = torch.nanmean(avg_dice)
@@ -111,7 +109,9 @@ class SAMWithLabelModule(pl.LightningModule):
         self.focal_loss_coef = focal_loss_coef
         self.label_loss_coef = label_loss_coef
         self.iou_loss_coef = iou_loss_coef
-        self.label_weight = torch.tensor(label_weight, dtype=torch.float32, device=self.device)
+        _label_weight = torch.tensor(label_weight, dtype=torch.float32, device=self.device)
+        _label_weight = _label_weight / _label_weight.sum() * 14
+        self.register_buffer("label_weight", _label_weight, False)
         self.optimizer_type = optimizer_type
         self.optimizer_kwargs = optimizer_kwargs
         self.debug = debug
@@ -124,8 +124,15 @@ class SAMWithLabelModule(pl.LightningModule):
             if not train_image_encoder and k.startswith("image_encoder"): 
                 continue
             assert k in new_state_dict.keys()
-            new_state_dict[k] = v
+            if v.shape != new_state_dict[k].shape:
+                assert v.shape[0] == 4 and new_state_dict[k].shape[0] == 14
+                assert v.shape[1:] == new_state_dict[k].shape[1:]
+                new_state_dict[k] = v[:1].repeat(*((14,) + (1,) * (len(v.shape) - 1)))
+            else :
+                new_state_dict[k] = v
+        
         self.model.load_state_dict(new_state_dict)
+        self.model.mask_decoder.copy_weights()
 
         self.segmentation_loss = SegmentationLoss(
             dice_loss_coef=dice_loss_coef,
@@ -134,7 +141,7 @@ class SAMWithLabelModule(pl.LightningModule):
             focal_loss_params=focal_loss_params,
         )
 
-        self.cross_entropy_loss = nn.CrossEntropyLoss().to(self.device)
+        self.cross_entropy_loss = nn.CrossEntropyLoss(reduction="none").to(self.device)
         self.training_dice_metric = DiceMetric()
         self.validation_dice_metric = DiceMetric()
 
@@ -179,7 +186,7 @@ class SAMWithLabelModule(pl.LightningModule):
             dense_prompt_embeddings=dense_embeddings,
             already_unfolded=True,
         )
-        assert batch_masks.shape[1] == 1
+        assert batch_masks.shape[1] == 14
 
         return batch_masks, batch_ious, batch_label
     
@@ -201,7 +208,8 @@ class SAMWithLabelModule(pl.LightningModule):
         binary_label = (lowres_labels[:, 0] == mask_cls[:, None, None]).to(torch.float)
         
         is_foreground_label = mask_cls != 0
-        segmentation_loss, _dice_loss, _focal_loss = self.segmentation_loss(batch_masks[torch.nonzero(is_foreground_label), mask_cls], binary_label[is_foreground_label])
+        batch_mask = batch_masks[torch.arange(B), mask_cls]
+        segmentation_loss, _dice_loss, _focal_loss = self.segmentation_loss(batch_mask[is_foreground_label], binary_label[is_foreground_label])
 
         with torch.no_grad():
             pred_binary_masks = (batch_masks > self.model.mask_threshold).to(torch.long)
@@ -215,7 +223,7 @@ class SAMWithLabelModule(pl.LightningModule):
             metric.update(pred_binary_masks[torch.arange(B), mask_cls], binary_label, mask_cls)
         
         iou_loss = ((ious - batch_ious) ** 2).mean()
-        label_loss = (self.cross_entropy_loss(batch_label, mask_cls.to(torch.long), reduction="none") * self.label_weight).mean()
+        label_loss = (self.cross_entropy_loss(batch_label, mask_cls.to(torch.long)) * self.label_weight[mask_cls]).mean()
 
         # if self.debug:
         #     if batch_name is None:

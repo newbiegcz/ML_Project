@@ -32,6 +32,16 @@ class MaskLabelDecoder(MaskDecoder):
         self.label_prediction_head = MLP(
             self.transformer_dim, label_head_hidden_dim, 14, label_head_depth
         )
+
+    def copy_weights(self):
+        # shape 不匹配已经处理过了
+        # 这里只需要复制多次重复了的 submodule
+        for i in range(1, self.num_mask_tokens):
+            old_state_dict = self.output_hypernetworks_mlps[0].state_dict()
+            for key in old_state_dict.keys():
+                old_state_dict[key] = old_state_dict[key].clone()
+            self.output_hypernetworks_mlps[i].load_state_dict(old_state_dict)
+        
         
     def forward(
         self,
