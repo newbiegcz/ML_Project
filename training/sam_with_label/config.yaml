@@ -43,6 +43,7 @@ fit:
     focal_loss_coef: 1
     label_loss_coef: 0.01
     iou_loss_coef: 0.5
+    model_kwargs: {}
     optimizer_type: AdamW
     optimizer_kwargs:
       lr: 0.0001
