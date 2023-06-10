@@ -86,9 +86,9 @@ class SamWithLabelPredictor:
         self.original_size = original_image_size
         self.input_size = tuple(transformed_image.shape[-2:])
         input_image = self.model.preprocess(transformed_image)
-        print('start encoder...')
+        #print('start encoder...')
         self.features = self.model.image_encoder(input_image)
-        print('end encoder...')
+        #print('end encoder...')
         self.is_image_set = True
 
     def predict(

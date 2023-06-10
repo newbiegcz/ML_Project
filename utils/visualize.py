@@ -13,6 +13,7 @@ import data.dataset as dataset
 import third_party.imgui_datascience.imgui_cv as imgui_cv
 import matplotlib.pyplot as plt
 import cv2
+import numpy as np
 
 initialized = False
 width, height = 1280, 720
@@ -169,8 +170,15 @@ def pre_display_func_2d(image, pd_label, gt_label, prompt_points, label_name, ba
                     point = (int(point[0]), int(point[1]))
                     color = (0, 0, 1.0) if t else (1.0, 0, 0) # OpenCV: BGR
                     image = cv2.circle(image, point, 2, color, -1)
-        
 
+        if image.dtype == np.uint8:
+            image = image.astype(np.float32) / 255
+        
+        # print(image.shape, pd_label.shape)
+        # org_shape = image.shape
+        # image = image.reshape((-1, 3))
+        # pd_label = pd_label.reshape((-1))
+        # gt_label = gt_label.reshape((-1))
         for i in range(len(label_name)):
             if display_settings.show_gt[i]:
                 t = gt_label == i
@@ -180,6 +188,7 @@ def pre_display_func_2d(image, pd_label, gt_label, prompt_points, label_name, ba
             if display_settings.show_pred[i]:
                 t = pd_label == i
                 image[t] = image[t] * (1 - alpha_pred) + np.array([[colors[2 * i + 1]]]) * alpha_pred
+        # image = image.reshape(org_shape)
 
         if image.dtype == np.float32 or image.dtype == np.float64:
             image = (image * 255).astype(np.uint8)
