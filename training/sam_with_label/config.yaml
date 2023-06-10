@@ -20,7 +20,7 @@ fit:
           monitor: val_Dice/mDice
           mode: max
     overfit_batches: 0
-    check_val_every_n_epoch: 1
+    check_val_every_n_epoch: 10
     log_every_n_steps: 10
     accumulate_grad_batches: 1
     benchmark: null
@@ -55,8 +55,8 @@ fit:
       gamma: 2
     debug: false
   data:
-    embedding_file_path: "/root/autodl-tmp/embeddings"
-    datapoint_file_path: "/root/autodl-tmp/datapoints"
+    embedding_file_path: "/root/autodl-tmp/data_with_no_augmentation/embeddings"
+    datapoint_file_path: "/root/autodl-tmp/data_with_no_augmentation/datapoints"
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5    # 在服务器应当调整
