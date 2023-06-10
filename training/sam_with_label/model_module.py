@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.nn as nn
 from .losses import SegmentationLoss
 from utils.visualize import default_label_names
+from typing import List
 # import utils.visualize as visualize
 from modeling.build_sam import pretrained_checkpoints
 
@@ -52,6 +53,14 @@ def iou_func(pred_binary_mask, binary_label):
     union = torch.count_nonzero(pred_binary_mask | (binary_label), dim=1)
     return intersection / union
 
+def ious_func(pred_binary_masks, binary_label):
+        B = pred_binary_masks.shape[0]
+        pred_binary_masks = pred_binary_masks.view(B, 14, -1)
+        binary_label = binary_label.view(B, 1, -1)
+        intersection = torch.count_nonzero(pred_binary_masks & binary_label, dim=2)
+        union = torch.count_nonzero(pred_binary_masks | (binary_label), dim=2)
+        return intersection / union
+
 class SAMWithLabelModule(pl.LightningModule):
     def __init__(self, 
                  model_type: str = "vit_h",
@@ -61,6 +70,7 @@ class SAMWithLabelModule(pl.LightningModule):
                  focal_loss_coef: float = 1.0,
                  label_loss_coef: float = 1.0,
                  iou_loss_coef: float = 1.0,
+                 label_weight: List[float] = [1.0] * 14,
                  optimizer_type: str = "AdamW",
                  model_kwargs: dict = {},
                  optimizer_kwargs: dict = {
@@ -101,6 +111,7 @@ class SAMWithLabelModule(pl.LightningModule):
         self.focal_loss_coef = focal_loss_coef
         self.label_loss_coef = label_loss_coef
         self.iou_loss_coef = iou_loss_coef
+        self.label_weight = torch.tensor(label_weight, dtype=torch.float32, device=self.device)
         self.optimizer_type = optimizer_type
         self.optimizer_kwargs = optimizer_kwargs
         self.debug = debug
@@ -166,16 +177,13 @@ class SAMWithLabelModule(pl.LightningModule):
             image_pe=self.model.prompt_encoder.get_dense_pe(),
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
-            multimask_output=False,
             already_unfolded=True,
         )
         assert batch_masks.shape[1] == 1
-        batch_mask = batch_masks[:, 0]
-        batch_iou = batch_ious[:, 0]
 
-        return batch_mask, batch_iou, batch_label
+        return batch_masks, batch_ious, batch_label
     
-    def get_loss_and_update_metric(self, batch, batch_mask, batch_iou, batch_label, metric, batch_name):
+    def get_loss_and_update_metric(self, batch, batch_masks, batch_ious, batch_label, metric, batch_name):
         B = len(batch['embedding'])
 
         segmentation_loss = 0.0
@@ -193,77 +201,59 @@ class SAMWithLabelModule(pl.LightningModule):
         binary_label = (lowres_labels[:, 0] == mask_cls[:, None, None]).to(torch.float)
         
         is_foreground_label = mask_cls != 0
-        segmentation_loss, _dice_loss, _focal_loss = self.segmentation_loss(batch_mask[is_foreground_label], binary_label[is_foreground_label])
-        
+        segmentation_loss, _dice_loss, _focal_loss = self.segmentation_loss(batch_masks[torch.nonzero(is_foreground_label), mask_cls], binary_label[is_foreground_label])
 
         with torch.no_grad():
-            pred_binary_mask = (batch_mask > self.model.mask_threshold).to(torch.long)
+            pred_binary_masks = (batch_masks > self.model.mask_threshold).to(torch.long)
             
             binary_label = binary_label.to(torch.long)
-            iou = iou_func(pred_binary_mask, binary_label)
-            assert (iou.shape[0] == B)
-            # bincount for each data point
-            intersection = (lowres_labels[:, 0] * pred_binary_mask).reshape(B, -1)
-            _ids = (intersection + (14 * torch.arange(B, device=self.device).reshape(-1, 1))).to(torch.long)
-            count = torch.bincount(_ids.reshape(-1), minlength=14 * B).reshape(B, 14)
-            count[:, 0] -= ((pred_binary_mask==0).reshape(B, -1)).sum(dim=1)
-            # print(count[0])
-            S = torch.sum(count, dim=1, keepdim=True)
-            label_density = count / S
-            assert (label_density.shape[0] == B)
+            
+            ious = ious_func(pred_binary_masks, binary_label)
+            ious[~is_foreground_label].fill_(0.0) # TODO: 这样做是否合适?
+            assert (ious.shape[0] == B)
 
-            one_hot_background = torch.zeros((14,), dtype=label_density.dtype, device=label_density.device)
-            one_hot_background[0] = 1
-
-            if torch.isnan(label_density).any():
-                print("\n\n\nWarning: nan in label_density!!!!! \n 可能的一种解释是针对背景，你的 model 要求 loss，所以他可能逐渐学会不把背景分出来。现在这样处理，之后有待验证。\n\n\n")
-
-            label_density[S[:, 0] == 0] = one_hot_background.unsqueeze(0)
-
-            metric.update(pred_binary_mask, binary_label, mask_cls)
-            # print(iou)
+            metric.update(pred_binary_masks[torch.arange(B), mask_cls], binary_label, mask_cls)
         
-        iou_loss = ((iou - batch_iou) ** 2).mean()
-        label_loss = self.cross_entropy_loss(batch_label, label_density)
+        iou_loss = ((ious - batch_ious) ** 2).mean()
+        label_loss = (self.cross_entropy_loss(batch_label, mask_cls.to(torch.long), reduction="none") * self.label_weight).mean()
 
-        if self.debug:
-            if batch_name is None:
-                batch_name = "unnamed"
+        # if self.debug:
+        #     if batch_name is None:
+        #         batch_name = "unnamed"
 
-            pd_output_label = torch.nn.functional.interpolate(
-                pred_binary_mask[0:1, None, :, :].to(torch.float32),
-                (1024, 1024),
-                mode="nearest-exact"
-            )[0].cpu().numpy()
+        #     pd_output_label = torch.nn.functional.interpolate(
+        #         pred_binary_mask[0:1, None, :, :].to(torch.float32),
+        #         (1024, 1024),
+        #         mode="nearest-exact"
+        #     )[0].cpu().numpy()
 
-            gt_output_label = torch.nn.functional.interpolate(
-                binary_label[0:1, None, :, :].to(torch.float32),
-                (1024, 1024),
-                mode="nearest-exact"
-            )[0].cpu().numpy()
+        #     gt_output_label = torch.nn.functional.interpolate(
+        #         binary_label[0:1, None, :, :].to(torch.float32),
+        #         (1024, 1024),
+        #         mode="nearest-exact"
+        #     )[0].cpu().numpy()
 
-            prompt = batch['prompt'][0].detach().cpu().numpy()
-            visualize.add_object_2d(batch_name + "_img0",
-                    image=batch['image'][0].detach().cpu().numpy(),
-                    pd_label=pd_output_label,
-                    gt_label=gt_output_label,
-                    prompt_points=[(prompt, 1)],
-                    label_name=["negative", "positive"],
-                        extras={
-                        "prompt": prompt,
-                        "prompt_label": default_label_names[mask_cls[0].cpu().to(torch.int)]
-                    }
-            )
-            input("")
-
+        #     prompt = batch['prompt'][0].detach().cpu().numpy()
+        #     visualize.add_object_2d(batch_name + "_img0",
+        #             image=batch['image'][0].detach().cpu().numpy(),
+        #             pd_label=pd_output_label,
+        #             gt_label=gt_output_label,
+        #             prompt_points=[(prompt, 1)],
+        #             label_name=["negative", "positive"],
+        #                 extras={
+        #                 "prompt": prompt,
+        #                 "prompt_label": default_label_names[mask_cls[0].cpu().to(torch.int)]
+        #             }
+        #     )
+        #     input("")
 
         return segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss
 
 
     def training_step(self, batch, batch_idx):
-        batch_mask, batch_iou, batch_label = self.get_logits(batch)
+        batch_masks, batch_ious, batch_label = self.get_logits(batch)
 
-        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, batch_label, self.training_dice_metric, "train_%d" % batch_idx)
+        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.training_dice_metric, "train_%d" % batch_idx)
 
         loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
 
@@ -285,9 +275,9 @@ class SAMWithLabelModule(pl.LightningModule):
         self.training_dice_metric.reset()
     
     def validation_step(self, batch, batch_idx):
-        batch_mask, batch_iou, batch_label = self.get_logits(batch)
+        batch_masks, batch_ious, batch_label = self.get_logits(batch)
 
-        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, batch_label, self.validation_dice_metric, "val_%d" % batch_idx)
+        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.validation_dice_metric, "val_%d" % batch_idx)
 
         loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
 

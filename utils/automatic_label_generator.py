@@ -38,10 +38,10 @@ class SamAutomaticLabelGenerator():
         model: SamWithLabel,
         points_per_side: Optional[int] = 32,
         points_per_batch: int = 64,
-        pred_iou_thresh: float = 0.60,
-        label_certainty_thresh: float = 0.70,
+        pred_iou_thresh: float = 0.50,
+        label_certainty_thresh: float = 0.0,
         #stability_score_thresh: float = 0.95,
-        stability_score_thresh: float = 0,
+        stability_score_thresh: float = 0.0,
         stability_score_offset: float = 1.0,
         box_nms_thresh: float = 0.7,
         crop_n_layers: int = 0,
@@ -139,7 +139,7 @@ class SamAutomaticLabelGenerator():
         self.output_mode = output_mode
 
     @torch.no_grad()
-    def generate_labels(self, image : np.ndarray) -> np.ndarray:
+    def generate_labels(self, image : np.ndarray, verbose=False) -> np.ndarray:
         """
         Generates labels for the given image.
 
@@ -150,7 +150,8 @@ class SamAutomaticLabelGenerator():
         Returns:
           np.ndarray : The label of each pixel, with shape (H, W).
         """
-        print('generating labels...')
+        if verbose:
+            print('generating labels...')
         masks = self.generate(image)
         labels = np.zeros(image.shape[:2], dtype=np.uint8)
 
@@ -171,7 +172,7 @@ class SamAutomaticLabelGenerator():
         return labels#, tmp
 
     @torch.no_grad()
-    def generate(self, image: np.ndarray) -> List[Dict[str, Any]]:
+    def generate(self, image: np.ndarray, verbose=False) -> List[Dict[str, Any]]:
         """
         Generates masks for the given image.
 
@@ -197,21 +198,25 @@ class SamAutomaticLabelGenerator():
                  the mask, given in XYWH format.
         """
         # Generate masks
-        print('Generating masks...')
+        if verbose:
+            print('Generating masks...')
         mask_data = self._generate_masks(image)
 
         # Filter small disconnected regions and holes in masks
-        print('Filtering small disconnected regions and holes in masks...')
+        if verbose:
+            print('Filtering small disconnected regions and holes in masks...')
         if self.min_mask_region_area > 0:
             mask_data = self.postprocess_small_regions(
                 mask_data,
                 self.min_mask_region_area,
                 max(self.box_nms_thresh, self.crop_nms_thresh),
             )
-        print('After filter small disconnected regions and holes in masks:', len(mask_data["rles"]))
+        if verbose:
+            print('After filter small disconnected regions and holes in masks:', len(mask_data["rles"]))
 
         # Encode masks
-        print('Encoding masks...')
+        if verbose:
+            print('Encoding masks...')
         if self.output_mode == "coco_rle":
             mask_data["segmentations"] = [coco_encode_rle(rle) for rle in mask_data["rles"]]
         elif self.output_mode == "binary_mask":
@@ -220,7 +225,8 @@ class SamAutomaticLabelGenerator():
             mask_data["segmentations"] = mask_data["rles"]
 
         # Write mask records
-        print('Writing mask records...')
+        if verbose:
+            print('Writing mask records...')
         curr_anns = []
         for idx in range(len(mask_data["segmentations"])):
             # print('label prediction:', mask_data["label_preds"][idx])
@@ -241,7 +247,7 @@ class SamAutomaticLabelGenerator():
         return curr_anns
 
 
-    def _generate_masks(self, image: np.ndarray) -> MaskData:
+    def _generate_masks(self, image: np.ndarray, verbose=False) -> MaskData:
         orig_size = image.shape[:2]
         crop_boxes, layer_idxs = generate_crop_boxes(
             orig_size, self.crop_n_layers, self.crop_overlap_ratio
@@ -266,7 +272,8 @@ class SamAutomaticLabelGenerator():
             )
             data.filter(keep_by_nms)
 
-        print('After filter by nms between crops:', len(data["rles"]))
+        if verbose:
+            print('After filter by nms between crops:', len(data["rles"]))
 
         data.to_numpy()
         return data
@@ -277,6 +284,7 @@ class SamAutomaticLabelGenerator():
         crop_box: List[int],
         crop_layer_idx: int,
         orig_size: Tuple[int, ...],
+        verbose=False
     ) -> MaskData:
         # print(image.shape)
 
@@ -306,7 +314,8 @@ class SamAutomaticLabelGenerator():
             iou_threshold=self.box_nms_thresh,
         )
         data.filter(keep_by_nms)
-        print('After filter by nms within crop:', len(data["rles"]))
+        if verbose:
+            print('After filter by nms within crop:', len(data["rles"]))
 
         # Return to the original image frame
         data["boxes"] = uncrop_boxes_xyxy(data["boxes"], crop_box)
@@ -321,6 +330,7 @@ class SamAutomaticLabelGenerator():
         im_size: Tuple[int, ...],
         crop_box: List[int],
         orig_size: Tuple[int, ...],
+        verbose=False
     ) -> MaskData:
         orig_h, orig_w = orig_size
 
@@ -347,13 +357,15 @@ class SamAutomaticLabelGenerator():
         )
         del masks
 
-        print('Before filter:', len(data["masks"]))
+        if verbose:
+            print('Before filter:', len(data["masks"]))
 
         # remove masks with predicted label = 0
         keep_mask = data["label_preds"].argmax(dim = 1) > 0
         #print('keep_mask shape:', keep_mask.shape)
         data.filter(keep_mask)
-        print('After filter by label prediction:', len(data["masks"]))
+        if verbose:
+            print('After filter by label prediction:', len(data["masks"]))
 
         if self.label_certainty_thresh > 0.0:
             prob = torch.nn.functional.softmax(data["label_preds"], dim=1)
@@ -362,14 +374,16 @@ class SamAutomaticLabelGenerator():
             data.filter(keep_mask)
 
         #print('Before filter by IoU:', len(data["masks"]))
-        print('IoU predictions:', data["iou_preds"])
+        if verbose:
+            print('IoU predictions:', data["iou_preds"])
 
         # Filter by predicted IoU
         if self.pred_iou_thresh > 0.0:
             keep_mask = data["iou_preds"] > self.pred_iou_thresh
             data.filter(keep_mask)
 
-        print('After filter by IoU:', len(data["masks"]))
+        if verbose:
+            print('After filter by IoU:', len(data["masks"]))
 
         # Calculate stability score
         
@@ -380,7 +394,8 @@ class SamAutomaticLabelGenerator():
             keep_mask = data["stability_score"] >= self.stability_score_thresh
             data.filter(keep_mask)
 
-        print('After filter by stability:', len(data["masks"]))
+        if verbose:
+            print('After filter by stability:', len(data["masks"]))
         
 
         # Threshold masks and calculate boxes
@@ -392,7 +407,8 @@ class SamAutomaticLabelGenerator():
         if not torch.all(keep_mask):
             data.filter(keep_mask)
 
-        print('After filter by touch crop boundaries:', len(data["masks"]))
+        if verbose:
+            print('After filter by touch crop boundaries:', len(data["masks"]))
 
         # Compress to RLE
         data["masks"] = uncrop_masks(data["masks"], crop_box, orig_h, orig_w)

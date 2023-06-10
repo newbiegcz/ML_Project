@@ -27,13 +27,13 @@ class LabelPredicter():
     predict the labels of CT data, using grid points as the prompt.
     """
 
-    def __init__(self, sam_model : SamWithLabel):
+    def __init__(self, sam_model : SamWithLabel, **kwargs):
         """
         Arguments:
         sam_model is a SamWithLabel model;
         """
         self.model = sam_model
-        self.automatic_label_generator = SamAutomaticLabelGenerator(self.model)
+        self.automatic_label_generator = SamAutomaticLabelGenerator(self.model, **kwargs)
         #print(self.model.device)
 
     def predict_one(self, images : List[np.ndarray], ground_truths : List[np.ndarray]):
@@ -143,9 +143,10 @@ class LabelPredicter():
                 ground_truths_list.append(label)
 
             # predict for single CT data
-            print('predicting one...')
+            # print('predicting one...')
             labels, dice = self.predict_one(images_list, ground_truths_list)
             labels = np.array(labels)
+            ground_truths_list = np.array(ground_truths_list)
             dices.append(np.mean(dice))
             #print(labels.shape)
             #print(dice.shape)
@@ -154,11 +155,92 @@ class LabelPredicter():
             # save labels and dice to file
             if not os.path.exists('result'):
                 os.mkdir('result')
-            np.save(f'result/{file_name_without_extension}.npy', labels)
+            np.save(f'result/{file_name_without_extension}_pd_labels.npy', labels)
+            np.save(f'result/{file_name_without_extension}_gt_labels.npy', ground_truths_list)
             np.save(f'result/{file_name_without_extension}_dice.npy', dice)
         
         # output mdice
-        print('mdice: {}'.format(np.mean(dices)))
+        mdice = np.mean(dices)
+        print('mdice: {}'.format(mdice))
+        return mdice
             
+    def debug_predict(self, file_key = 'validation', data_list_file_path = 'raw_data/dataset_0.json'):
+        # get file names
+        files = load_decathlon_datalist(data_list_file_path, True, file_key)
+        
+        # get transform
+        transform = torchvision.transforms.Compose(
+            [DictTransform(["image", "label"], torchvision.transforms.Lambda(lambda x: x.unsqueeze(0).repeat(3, 1, 1))),
+            PreprocessForModel(normalize=False)]
+        )
 
+        # read files
+        set_track_meta(True)
+        _default_transform = Compose(
+            [
+                LoadImaged(keys=["image", "label"], ensure_channel_first=True, dtype=np.float64),
+                ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True, dtype=np.float64),
+                CropForegroundd(keys=["image", "label"], source_key="image", dtype=np.float64),
+                Orientationd(keys=["image", "label"], axcodes="RAS"),
+                EnsureTyped(keys=["image", "label"], track_meta=False, dtype=np.float64),
+            ]
+        )
+        cache = CacheDataset(
+            data=files[:1], 
+            transform=_default_transform, 
+            cache_rate=1.0, 
+            num_workers=4
+        )
+        set_track_meta(False)
 
+        # predict
+        dices = []
+        for d in tqdm(cache, desc="CT"):
+            file_path = d['image_meta_dict']['filename_or_obj']
+            file_name = os.path.basename(file_path)
+            index_of_dot = file_name.index('.')
+            file_name_without_extension = file_name[:index_of_dot] # img0035
+
+            images, labels = d['image'][0], d['label'][0]
+            h = images.shape[2]
+            images_list = []
+            ground_truths_list = []
+
+            print('reading data...')
+            for i in range(h): # np.random.choice(h, 10, replace=False):
+                # print('{}/{}'.format(i,h))
+                data = {
+                    "image": images[:, :, i],
+                    "label": labels[:, :, i],
+                    "h": i / h
+                }
+                data = transform(data)
+                image = data['image'].numpy().transpose(1, 2, 0)
+                image = (image*255).astype(np.uint8)
+                label = data['label'][0].numpy()
+                images_list.append(image)
+                ground_truths_list.append(label)
+
+            # predict for single CT data
+            # print('predicting one...')
+            labels, dice = self.predict_one(images_list, ground_truths_list)
+            labels = np.array(labels)
+            ground_truths_list = np.array(ground_truths_list)
+            images_list = np.array(images_list)
+            dices.append(np.mean(dice))
+            #print(labels.shape)
+            #print(dice.shape)
+            #print(dice)
+
+            # save labels and dice to file
+            if not os.path.exists('result'):
+                os.mkdir('result')
+            np.save(f'result/{file_name_without_extension}_imgs.npy', images_list)
+            np.save(f'result/{file_name_without_extension}_pd_labels.npy', labels)
+            np.save(f'result/{file_name_without_extension}_gt_labels.npy', ground_truths_list)
+            np.save(f'result/{file_name_without_extension}_dice.npy', dice)
+        
+        # output mdice
+        mdice = np.mean(dices)
+        print('mdice: {}'.format(mdice))
+        return mdice
