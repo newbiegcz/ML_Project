@@ -20,7 +20,7 @@ fit:
           monitor: val_Dice/mDice
           mode: max
     overfit_batches: 0
-    check_val_every_n_epoch: 1
+    check_val_every_n_epoch: 10
     log_every_n_steps: 10
     accumulate_grad_batches: 1
     benchmark: null
@@ -41,8 +41,10 @@ fit:
     train_prompt_encoder: true
     dice_loss_coef: 0.05
     focal_loss_coef: 1
-    label_loss_coef: 0.01
-    iou_loss_coef: 0.5
+    label_loss_coef: 0.1 # 较大的值
+    iou_loss_coef: 1.0
+    label_weight: [15078195, 116341, 75482, 63875, 3124, 5738, 649173, 174449, 28613, 34208, 16374, 42481, 1623, 2164]
+    model_kwargs: {}
     optimizer_type: AdamW
     optimizer_kwargs:
       lr: 0.0001
@@ -55,8 +57,8 @@ fit:
       gamma: 2
     debug: false
   data:
-    embedding_file_path: "/root/autodl-tmp/embeddings"
-    datapoint_file_path: "/root/autodl-tmp/datapoints"
+    embedding_file_path: "/root/autodl-tmp/data_with_no_augmentation/embeddings"
+    datapoint_file_path: "/root/autodl-tmp/data_with_no_augmentation/datapoints"
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5    # 在服务器应当调整
