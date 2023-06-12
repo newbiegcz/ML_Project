@@ -46,7 +46,7 @@ fit:
     label_weight: [20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     model_kwargs:
       iou_head_hidden_dim: 256
-      label_head_hidden_dim: 128
+      label_head_hidden_dim: 256
       
     optimizer_type: AdamW
     optimizer_kwargs:

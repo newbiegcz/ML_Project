@@ -1,6 +1,7 @@
 from third_party.positional_encodings.torch_encodings import PositionalEncoding3D
 from third_party.segment_anything.modeling.prompt_encoder import PromptEncoder
 from typing import Optional, Tuple, Type
+import torch
 import torch.nn as nn
 
 class Prompt3DEncoder(PromptEncoder):
@@ -51,7 +52,7 @@ class Prompt3DEncoder(PromptEncoder):
         masks: Optional[torch.Tensor],
         prompt_3ds: Optional[torch.Tensor],
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        bs = self._get_batch_size(points, boxes, masks)
+        bs = self._get_batch_size(points, boxes, masks, prompt_3ds)
         sparse_embeddings = torch.empty((bs, 0, self.embed_dim), device=self._get_device())
         if points is not None:
             coords, labels = points
