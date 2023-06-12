@@ -213,6 +213,7 @@ class SAMWithLabelModule(pl.LightningModule):
                                     points=(point_coords, point_labels),
                                     boxes=None,
                                     masks=None,
+                                    prompt_3ds=batch['3d']
                                 )
             
         batch_masks, batch_ious, batch_label = self.model.mask_decoder(
