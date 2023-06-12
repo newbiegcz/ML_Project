@@ -62,17 +62,17 @@ class LabelMetric():
     @torch.no_grad()
     def get_metrics(self):
         # both accuracy and confusion matrix are computed on the whole dataset
-        pd_labels = torch.cat(self.pd_labels, dim=0)
-        gt_labels = torch.cat(self.gt_labels, dim=0)
+        pd_labels = torch.cat(self.pd_labels)
+        gt_labels = torch.cat(self.gt_labels)
+        # print(gt_labels.shape, gt_labels.dtype, self.label_weights.shape)
         acc = torch.sum(pd_labels == gt_labels).float() / pd_labels.shape[0]
-        weight = self.label_weights[self.gt_labels]
+        weight = self.label_weights[gt_labels]
         weighted_acc = torch.sum((pd_labels == gt_labels).float() * weight) / torch.sum(weight)
         confusion_matrix = wandb.plot.confusion_matrix(
-            y_true=gt_labels,
-            preds=pd_labels,
+            y_true=gt_labels.numpy(),
+            preds=pd_labels.numpy(),
             class_names=default_label_names,
             title="Confusion Matrix",
-            normalize="true",
         )
         return acc, weighted_acc, confusion_matrix
         
