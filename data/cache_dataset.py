@@ -33,4 +33,5 @@ class DiskCacheDataset(Dataset):
         res["label"] = self.embedding_cache[(self.key, self.datapoint_cache[(self.key, idx)].image_id)]["label"]
         res["mask_cls"] = self.datapoint_cache[(self.key, idx)].mask_cls
         res["prompt"] = self.datapoint_cache[(self.key, idx)].prompt_point
+        res["3d"] = [res["prompt"][0] / 1024, res["prompt"][1] / 1024, self.embedding_cache[(self.key, self.datapoint_cache[(self.key, idx)].image_id)]["h"]]
         return res
