@@ -37,24 +37,24 @@ from modeling.build_sam import build_pretrained_encoder
 from data.dataset import data_files
 from tqdm import tqdm
 import utils.visualize as viz
+from collections import namedtuple
 
 checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
-datapoints_disk_path = "processed_data/datapoints"
-embedding_disk_path = "processed_data/embeddings"
+datapoints_disk_path = "/root/autodl-tmp/data_with_no_augmentation/datapoints"
+embedding_disk_path = "/root/autodl-tmp/data_with_no_augmentation/embeddings"
 
 size_threshold_in_bytes= 400 * 1024 * 1024 * 1024 # 200 GB
-debug = True
+debug = False
 times = 1 # The number of times to augment an image
-datapoints_for_training = 100 # The number of datapoints to use for training
-datapoints_for_validation = 100 # The number of datapoints to use for validation
-min_pixels = 5
+datapoints_for_training = 5000000 # The number of datapoints to use for training
+datapoints_for_validation = 100000 # The number of datapoints to use for validation
 
 
 datapoints_cache = diskcache.Cache(datapoints_disk_path, eviction_policy = "none")
 image_cache = diskcache.Cache(embedding_disk_path, eviction_policy = "none")
 
 encoder = build_pretrained_encoder("vit_h", eval=True)
-#encoder.to("cuda")
+encoder.to("cuda")
 
 all_cmaps = plt.colormaps()
 exclude = ['flag', 'prism', 'ocean', 'gist_earth', 'terrain',
@@ -145,7 +145,6 @@ transform_2d_withnoaugmentation = (
             wrap_albumentations_transform(
                 albumentations.Compose([
                     albumentations.Lambda(image=unsqueeze, mask=unsqueeze),
-                    albumentations.Lambda(image=lambda x : np.repeat(x, 3)),
                     gen_clache(p=1),
                     albumentations.pytorch.transforms.ToTensorV2(transpose_mask=True)
                 ])
@@ -199,23 +198,21 @@ transform_2d_for_validation = (
 
 seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
-data_files_training = data_files["training"][:1]
-data_files_validation = data_files["validation"][:1]
+data_files_training = data_files["training"]
+data_files_validation = data_files["validation"]
 raw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 raw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
-raw_dataset_validation = raw_dataset_validation[40 : 42]
-raw_dataset_training = raw_dataset_training[40 : 42]
 
 def gen_training(idx):
     image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
     with TorchSeed(image_seed):
-        d = transform_2d_for_training(raw_dataset_training[idx], seed=image_seed+1)
+        d = transform_2d_withnoaugmentation(raw_dataset_training[idx], seed=image_seed+1)
     return d
 
 def gen_validation(idx):
     image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
     with TorchSeed(image_seed):
-        d = transform_2d_for_validation(raw_dataset_validation[idx], seed=image_seed+1)
+        d = transform_2d_withnoaugmentation(raw_dataset_validation[idx], seed=image_seed+1)
     return d
 
 print("doing image encoding for training...")
@@ -236,7 +233,7 @@ for i in tqdm(range(len(raw_dataset_training))):
             img = torch.stack(img_list)
 
             with torch.inference_mode():
-                embeddings = encoder(img)
+                embeddings = encoder(img.cuda()).cpu()
 
             for k in range(batch_size):
                 cur = dict()
@@ -272,7 +269,7 @@ for i in tqdm(range(len(raw_dataset_validation))):
         img = torch.stack(img_list)
 
         with torch.inference_mode():
-            embeddings = encoder(img)
+            embeddings = encoder(img.cuda()).cpu()
 
         for k in range(batch_size):
             cur = dict()
@@ -287,8 +284,6 @@ for i in tqdm(range(len(raw_dataset_validation))):
 
 print("validation encoding done! The total number of image is %d." % (num_image_validation))
 image_cache["num_image_for_validation"] = num_image_validation
-
-num_datapoints = 0
 
 def bounding_box(label):
     nonzero_indexes = torch.nonzero(label)
@@ -316,50 +311,70 @@ def get_prompt(label, cur_label):
 
     return result
 
+num_image_training = image_cache["num_image_for_training"]
+num_image_validation = image_cache["num_image_for_validation"]
 print("generating training datapoints...")
+
+POINT = namedtuple("POINT", ["image_id", "mask_cls", "prompt_point"])
+
+lst_points = np.zeros((num_image_training, 14, times, 2), dtype=np.int32)
 label_list = [[] for _ in range(14)]
-for i in range(num_image_training):
-    for j in range(1, 14):
-        if torch.count_nonzero(image_cache[("training", i)]["label"][0] == j) >= min_pixels:
+for i in tqdm(range(num_image_training)):
+    label = image_cache[("training", i)]["label"][0]
+    for j in range(0, 14):
+        if torch.count_nonzero(label == j) > 0:
             label_list[j].append(i)
+            nonzero_indexes = torch.nonzero(label == j)
+            inds = torch.randint(len(nonzero_indexes), (times,), generator=seed_rng)
+            for k in range(times):
+                lst_points[i, j, k, 0] = nonzero_indexes[inds[k]][1]
+                lst_points[i, j, k, 1] = nonzero_indexes[inds[k]][0]
 
 for i in tqdm(range(datapoints_for_training)):
     while True:
-        cur_label = torch.randint(13, (1,), generator=seed_rng).item() + 1
-        if len(label_list[cur_label]) > 0:
+        cur_label = torch.randint(13, (1,), generator=seed_rng).item() + 1 
+        if (len(label_list[cur_label]) > 0):
             break
-
+    
     image_index = torch.randint(len(label_list[cur_label]), (1,), generator=seed_rng).item()
     image_index = label_list[cur_label][image_index]
+    id = torch.randint(times, (1,), generator=seed_rng).item()
 
-    datum = get_prompt(image_cache[("training", image_index)]["label"][0], cur_label)
-    datum["image_id"] = image_index
-    
+    datum = POINT(image_id = int(image_index), mask_cls = int(cur_label), prompt_point = list(lst_points[image_index, cur_label, id]))
+
     datapoints_cache[("training", i)] = datum
 
 print("training datapoints completed!The number of total datapoints is %d." % (datapoints_for_training))
 datapoints_cache["num_datapoints_for_training"] = datapoints_for_training
 
 print("generating validation datapoints...")
+lst_points = np.zeros((num_image_validation, 14, times, 2), dtype=np.int32)
 label_list = [[] for _ in range(14)]
-for i in range(num_image_validation):
-    for j in range(1, 14):
-        if torch.count_nonzero(image_cache[("validation", i)]["label"][0] == j) >= min_pixels:
+for i in tqdm(range(num_image_validation)):
+    label = image_cache[("validation", i)]["label"][0]
+    for j in range(0, 14):
+        if torch.count_nonzero(label == j) > 0:
             label_list[j].append(i)
+            nonzero_indexes = torch.nonzero(label == j)
+            inds = torch.randint(len(nonzero_indexes), (times,), generator=seed_rng)
+            for k in range(times):
+                lst_points[i, j, k, 0] = nonzero_indexes[inds[k]][1]
+                lst_points[i, j, k, 1] = nonzero_indexes[inds[k]][0]
 
 for i in tqdm(range(datapoints_for_validation)):
     while True:
-        cur_label = torch.randint(13, (1,), generator=seed_rng).item() + 1
-        if len(label_list[cur_label]) > 0:
+        cur_label = torch.randint(13, (1,), generator=seed_rng).item() + 1 
+        if (len(label_list[cur_label]) > 0):
             break
-
+    
     image_index = torch.randint(len(label_list[cur_label]), (1,), generator=seed_rng).item()
     image_index = label_list[cur_label][image_index]
+    id = torch.randint(times, (1,), generator=seed_rng).item()
 
-    datum = get_prompt(image_cache[("validation", image_index)]["label"][0], cur_label)
-    datum["image_id"] = image_index
-    
+    datum = POINT(image_id = int(image_index), mask_cls = int(cur_label), prompt_point = list(lst_points[image_index, cur_label, id]))
+
     datapoints_cache[("validation", i)] = datum
+
 
 print("validation datapoints completed!The number of total datapoints is %d." % (datapoints_for_validation))
 datapoints_cache["num_datapoints_for_validation"] = datapoints_for_validation
@@ -369,12 +384,12 @@ if debug:
 
     for i in range(datapoints_cache["num_datapoints_for_validation"]):
         datum = datapoints_cache[("validation", i)]
-        prompt_point = datum["prompt_point"]
-        cls = datum["mask_cls"]
+        prompt_point = datum.prompt_point
+        cls = datum.mask_cls
         viz.add_object_2d("image" + str(i),
-                          image=image_cache[("validation", datum['image_id'])]["low_res_image"].squeeze(0).numpy(),
+                          image=image_cache[("validation", datum.image_id)]["low_res_image"].squeeze(0).numpy(),
                           pd_label=None,
-                          gt_label=torch.nn.functional.interpolate(image_cache[("validation", datum['image_id'])]["label"].unsqueeze(0), size=(256, 256), mode='nearest').numpy()[0],
+                          gt_label=torch.nn.functional.interpolate(image_cache[("validation", datum.image_id)]["label"].unsqueeze(0), size=(256, 256), mode='nearest').numpy()[0],
                           prompt_points=[([prompt_point[0] // 4, prompt_point[1] // 4], 0)],
                           label_name=viz.default_label_names,
                              extras={
