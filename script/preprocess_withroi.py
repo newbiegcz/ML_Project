@@ -62,7 +62,7 @@ datapoints_disk_path = "processed_data/datapoints"
 embedding_disk_path = "processed_data/embeddings"
 
 size_threshold_in_bytes= 200 * 1024 * 1024 * 1024 # 200 GB
-debug = True
+debug = False
 times = 1 # The number of times to augment an image
 datapoints_for_training = 100 # The number of datapoints to use for training
 datapoints_for_validation = 100 # The number of datapoints to use for validation
@@ -71,7 +71,7 @@ datapoints_cache = diskcache.Cache(datapoints_disk_path, eviction_policy = "none
 image_cache = diskcache.Cache(embedding_disk_path, eviction_policy = "none")
 
 encoder = build_pretrained_encoder("vit_h", eval=True)
-#encoder.to("cuda")
+encoder.to("cuda")
 
 all_cmaps = plt.colormaps()
 exclude = ['flag', 'prism', 'ocean', 'gist_earth', 'terrain',
@@ -349,12 +349,12 @@ for i in tqdm(range(len(raw_dataset_training))):
         if (len(img_list) >= batch_size):
             img = torch.stack(img_list)
 
-            #with torch.inference_mode():
-             #   embeddings = encoder(img.cuda()).cpu()
+            with torch.inference_mode():
+                embeddings = encoder(img.cuda()).cpu()
 
             for k in range(batch_size):
                 cur = dict()
-                # cur["embedding"] = embeddings[k].clone()
+                cur["embedding"] = embeddings[k].clone()
                 cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
                 cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
                 cur["h"] = image["h"]
@@ -386,12 +386,12 @@ for i in tqdm(range(len(raw_dataset_validation))):
     if (len(img_list) >= batch_size):
         img = torch.stack(img_list)
 
-        # with torch.inference_mode():
-          #  embeddings = encoder(img.cuda()).cpu()
+        with torch.inference_mode():
+            embeddings = encoder(img.cuda()).cpu()
 
         for k in range(batch_size):
             cur = dict()
-           # cur["embedding"] = embeddings[k].clone()
+            cur["embedding"] = embeddings[k].clone()
             cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
             cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
             cur["h"] = image["h"]
@@ -451,7 +451,7 @@ for i in tqdm(range(num_image_training)):
 
 for i in tqdm(range(datapoints_for_training)):
     while True:
-        cur_label = torch.randint(13, (1,), generator=seed_rng).item() + 1 
+        cur_label = torch.randint(14, (1,), generator=seed_rng).item()
         if (len(label_list[cur_label]) > 0):
             break
     
@@ -482,7 +482,7 @@ for i in tqdm(range(num_image_validation)):
 
 for i in tqdm(range(datapoints_for_validation)):
     while True:
-        cur_label = torch.randint(13, (1,), generator=seed_rng).item() + 1 
+        cur_label = torch.randint(14, (1,), generator=seed_rng).item()
         if (len(label_list[cur_label]) > 0):
             break
     
