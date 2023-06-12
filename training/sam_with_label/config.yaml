@@ -20,7 +20,7 @@ fit:
           monitor: val_Dice/mDice
           mode: max
     overfit_batches: 0
-    check_val_every_n_epoch: 10
+    check_val_every_n_epoch: 1
     log_every_n_steps: 10
     accumulate_grad_batches: 1
     benchmark: null
@@ -31,7 +31,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-      name: 带 ROI, 无增广
+      name: dai ROI,wuzengguang
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -57,16 +57,11 @@ fit:
       gamma: 2
     debug: false
   data:
-<<<<<<< HEAD
     embedding_file_path: "/root/autodl-tmp/data_with_roi/embeddings"
     datapoint_file_path: "/root/autodl-tmp/data_with_roi/datapoints"
-=======
-    embedding_file_path: "/root/autodl-tmp/data_with_no_augmentation/embeddings"
-    datapoint_file_path: "/root/autodl-tmp/data_with_no_augmentation/datapoints"
->>>>>>> origin/task3
     model_type: "vit_h"
     batch_size: 64
-    num_workers: 5    # 在服务器应当调整
+    num_workers: 5
     debug: False
   # data:
   #     embedding_file_path: "/root/autodl-tmp/embeddings"

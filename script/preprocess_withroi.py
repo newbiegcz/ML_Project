@@ -58,14 +58,14 @@ from monai.transforms import (
 )
 
 checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
-datapoints_disk_path = "processed_data/datapoints"
-embedding_disk_path = "processed_data/embeddings"
+datapoints_disk_path = "/root/autodl-tmp/data_with_roi/datapoints"
+embedding_disk_path = "/root/autodl-tmp/data_with_roi/embeddings"
 
 size_threshold_in_bytes= 200 * 1024 * 1024 * 1024 # 200 GB
 debug = False
 times = 1 # The number of times to augment an image
-datapoints_for_training = 100 # The number of datapoints to use for training
-datapoints_for_validation = 100 # The number of datapoints to use for validation
+datapoints_for_training = 5000000 # The number of datapoints to use for training
+datapoints_for_validation = 100000 # The number of datapoints to use for validation
 
 datapoints_cache = diskcache.Cache(datapoints_disk_path, eviction_policy = "none")
 image_cache = diskcache.Cache(embedding_disk_path, eviction_policy = "none")
@@ -241,8 +241,8 @@ class Dataset2D(data.Dataset):
 
 seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
-data_files_training = data_files["training"][20:21]
-data_files_validation = data_files["validation"][:1]
+data_files_training = data_files["training"]
+data_files_validation = data_files["validation"]
 rraw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 rraw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 
@@ -454,7 +454,7 @@ for i in tqdm(range(datapoints_for_training)):
         cur_label = torch.randint(14, (1,), generator=seed_rng).item()
         if (len(label_list[cur_label]) > 0):
             break
-    
+
     image_index = torch.randint(len(label_list[cur_label]), (1,), generator=seed_rng).item()
     image_index = label_list[cur_label][image_index]
     id = torch.randint(times, (1,), generator=seed_rng).item()
