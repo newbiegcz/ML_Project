@@ -1,3 +1,4 @@
+from collections import namedtuple
 from typing import Any, Dict
 from lightning.pytorch import Trainer
 import lightning.pytorch as pl
@@ -6,6 +7,8 @@ from training.sam_with_label.model_module import SAMWithLabelModule
 from training.sam_with_label.data_module import DiskDataModule, MemoryDataModule
 from lightning.pytorch.loggers.wandb import WandbLogger
 import torch.multiprocessing as multiprocessing
+
+POINT = namedtuple("POINT", ["image_id", "mask_cls", "prompt_point"])
 
 # TODO: 优化 optimizer 的内存 (parameters & 更好的优化器)
 # TODO: 降低精度 && warning 中的建议
@@ -29,7 +32,7 @@ class MyTrainer(Trainer):
         super().__init__(logger=logger, **kwargs)
 
 def cli_main():
-    cli = MyLightningCLI(SAMWithLabelModule, MemoryDataModule,
+    cli = MyLightningCLI(SAMWithLabelModule, DiskDataModule,
         trainer_class=MyTrainer,
         parser_kwargs={
             "default_config_files": ["training/sam_with_label/config.yaml"],   
