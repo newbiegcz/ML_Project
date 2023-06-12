@@ -80,9 +80,7 @@ def _build_sam_with_label(
             ),
             transformer_dim=prompt_embed_dim,
             iou_head_depth=3,
-            iou_head_hidden_dim=256,
             label_head_depth=3,
-            label_head_hidden_dim=256,
             **kwargs
         ), 
         pixel_mean=[123.675, 116.28, 103.53],

@@ -44,7 +44,10 @@ fit:
     label_loss_coef: 0.1 # 较大的值
     iou_loss_coef: 1.0
     label_weight: [20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-    model_kwargs: {}
+    model_kwargs:
+      iou_head_hidden_dim: 256
+      label_head_hidden_dim: 256
+      
     optimizer_type: AdamW
     optimizer_kwargs:
       lr: 0.0001
