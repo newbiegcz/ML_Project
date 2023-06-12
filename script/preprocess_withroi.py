@@ -62,7 +62,7 @@ datapoints_disk_path = "processed_data/datapoints"
 embedding_disk_path = "processed_data/embeddings"
 
 size_threshold_in_bytes= 200 * 1024 * 1024 * 1024 # 200 GB
-debug = False
+debug = True
 times = 1 # The number of times to augment an image
 datapoints_for_training = 100 # The number of datapoints to use for training
 datapoints_for_validation = 100 # The number of datapoints to use for validation
@@ -71,7 +71,7 @@ datapoints_cache = diskcache.Cache(datapoints_disk_path, eviction_policy = "none
 image_cache = diskcache.Cache(embedding_disk_path, eviction_policy = "none")
 
 encoder = build_pretrained_encoder("vit_h", eval=True)
-encoder.to("cuda")
+#encoder.to("cuda")
 
 all_cmaps = plt.colormaps()
 exclude = ['flag', 'prism', 'ocean', 'gist_earth', 'terrain',
@@ -148,13 +148,6 @@ def wrap_albumentations_transform(transform):
 def unsqueeze(x, **kwargs):
     return x.reshape(x.shape + (1,))
             
-def gen_clache(**kwargs):
-    return albumentations.Compose([
-        albumentations.FromFloat(dtype="uint8"),
-        albumentations.CLAHE(**kwargs),
-        albumentations.ToFloat()
-    ])
-
 transform_2d_withnoaugmentation = (
     wrap_with_torchseed(
         torchvision.transforms.Compose([
@@ -167,6 +160,39 @@ transform_2d_withnoaugmentation = (
                 ])
             ),
             PreprocessForModel(normalize=True),
+        ])
+    )
+)
+
+def extend(x, **kwargs):
+    w, h, z = x.shape
+    assert(z == 1)
+    print(x.shape)
+    acc = np.tile(np.arange(w), (h, 1)).T.reshape((w, h, 1))
+    bcc = np.tile(np.arange(h), (w, 1)).reshape((w, h, 1))
+    res = np.concatenate((x, acc, bcc), axis = 2)
+    print(res.shape)
+    return res
+
+transform_2d_withaugmentation = (
+    wrap_with_torchseed(
+        torchvision.transforms.Compose([
+            DictTransform(["image", "label"], lambda x : x.numpy()),
+            wrap_albumentations_transform(
+                albumentations.Compose([
+                    albumentations.Lambda(image=unsqueeze, mask=unsqueeze),
+                    albumentations.FromFloat(dtype="uint8"),
+                    albumentations.augmentations.transforms.ISONoise(color_shift = (0.00, 0.00), intensity = (0.1, 0.5), p = 0.5),
+                    albumentations.ToFloat(),
+                    albumentations.Lambda(image=extend), 
+                    albumentations.CropNonEmptyMaskIfExists(, p=0.5),
+                    albumentations.HorizontalFlip(p=0.5),
+                    albumentations.VerticalFlip(p=0.5),
+                    albumentations.RandomRotate90(p=0.5),
+                    albumentations.pytorch.transforms.ToTensorV2(transpose_mask=True)
+                ])
+            ),
+            #PreprocessForModel(normalize=True),
         ])
     )
 )
@@ -249,13 +275,13 @@ rraw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('
 def gen_training(img):
     image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
     with TorchSeed(image_seed):
-        d = transform_2d_withnoaugmentation(img, seed=image_seed+1)
+        d = transform_2d_withaugmentation(img, seed=image_seed+1)
     return d
 
 def gen_validation(img):
     image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
     with TorchSeed(image_seed):
-        d = transform_2d_withnoaugmentation(img, seed=image_seed+1)
+        d = transform_2d_withaugmentation(img, seed=image_seed+1)
     return d
 
 train_c = len(rraw_dataset_training)
@@ -349,12 +375,12 @@ for i in tqdm(range(len(raw_dataset_training))):
         if (len(img_list) >= batch_size):
             img = torch.stack(img_list)
 
-            with torch.inference_mode():
-                embeddings = encoder(img.cuda()).cpu()
+            #with torch.inference_mode():
+             #   embeddings = encoder(img.cuda()).cpu()
 
             for k in range(batch_size):
                 cur = dict()
-                cur["embedding"] = embeddings[k].clone()
+                #cur["embedding"] = embeddings[k].clone()
                 cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
                 cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
                 cur["h"] = image["h"]
@@ -386,12 +412,12 @@ for i in tqdm(range(len(raw_dataset_validation))):
     if (len(img_list) >= batch_size):
         img = torch.stack(img_list)
 
-        with torch.inference_mode():
-            embeddings = encoder(img.cuda()).cpu()
+        #with torch.inference_mode():
+         #   embeddings = encoder(img.cuda()).cpu()
 
         for k in range(batch_size):
             cur = dict()
-            cur["embedding"] = embeddings[k].clone()
+           # cur["embedding"] = embeddings[k].clone()
             cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
             cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
             cur["h"] = image["h"]
@@ -455,6 +481,8 @@ for i in tqdm(range(datapoints_for_training)):
         if (len(label_list[cur_label]) > 0):
             break
     
+    print(cur_label)
+
     image_index = torch.randint(len(label_list[cur_label]), (1,), generator=seed_rng).item()
     image_index = label_list[cur_label][image_index]
     id = torch.randint(times, (1,), generator=seed_rng).item()
