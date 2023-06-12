@@ -58,14 +58,14 @@ from monai.transforms import (
 )
 
 checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
-datapoints_disk_path = "/root/autodl-tmp/data_with_roi/datapoints"
-embedding_disk_path = "/root/autodl-tmp/data_with_roi/embeddings"
+datapoints_disk_path = "processed_data/datapoints"
+embedding_disk_path = "processed_data/embeddings"
 
 size_threshold_in_bytes= 200 * 1024 * 1024 * 1024 # 200 GB
 debug = False
 times = 1 # The number of times to augment an image
-datapoints_for_training = 5000000 # The number of datapoints to use for training
-datapoints_for_validation = 100000 # The number of datapoints to use for validation
+datapoints_for_training = 100 # The number of datapoints to use for training
+datapoints_for_validation = 100 # The number of datapoints to use for validation
 
 datapoints_cache = diskcache.Cache(datapoints_disk_path, eviction_policy = "none")
 image_cache = diskcache.Cache(embedding_disk_path, eviction_policy = "none")
@@ -241,8 +241,8 @@ class Dataset2D(data.Dataset):
 
 seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
-data_files_training = data_files["training"]
-data_files_validation = data_files["validation"]
+data_files_training = data_files["training"][20:21]
+data_files_validation = data_files["validation"][:1]
 rraw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 rraw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 
@@ -451,7 +451,7 @@ for i in tqdm(range(num_image_training)):
 
 for i in tqdm(range(datapoints_for_training)):
     while True:
-        cur_label = torch.randint(13, (1,), generator=seed_rng).item() + 1 
+        cur_label = torch.randint(14, (1,), generator=seed_rng).item()
         if (len(label_list[cur_label]) > 0):
             break
     
@@ -482,7 +482,7 @@ for i in tqdm(range(num_image_validation)):
 
 for i in tqdm(range(datapoints_for_validation)):
     while True:
-        cur_label = torch.randint(13, (1,), generator=seed_rng).item() + 1 
+        cur_label = torch.randint(14, (1,), generator=seed_rng).item()
         if (len(label_list[cur_label]) > 0):
             break
     
@@ -501,14 +501,14 @@ datapoints_cache["num_datapoints_for_validation"] = datapoints_for_validation
 if debug:
     viz.initialize_window()
 
-    for i in range(datapoints_cache["num_datapoints_for_validation"]):
-        datum = datapoints_cache[("validation", i)]
+    for i in range(datapoints_cache["num_datapoints_for_training"]):
+        datum = datapoints_cache[("training", i)]
         prompt_point = datum.prompt_point
         cls = datum.mask_cls
         viz.add_object_2d("image" + str(i),
-                          image=image_cache[("validation", datum.image_id)]["low_res_image"].squeeze(0).numpy(),
+                          image=image_cache[("training", datum.image_id)]["low_res_image"].squeeze(0).numpy(),
                           pd_label=None,
-                          gt_label=torch.nn.functional.interpolate(image_cache[("validation", datum.image_id)]["label"].unsqueeze(0), size=(256, 256), mode='nearest').numpy()[0],
+                          gt_label=torch.nn.functional.interpolate(image_cache[("training", datum.image_id)]["label"].unsqueeze(0), size=(256, 256), mode='nearest').numpy()[0],
                           prompt_points=[([prompt_point[0] // 4, prompt_point[1] // 4], 0)],
                           label_name=viz.default_label_names,
                              extras={
