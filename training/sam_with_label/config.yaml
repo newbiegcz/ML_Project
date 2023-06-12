@@ -10,7 +10,7 @@ fit:
     strategy: auto
     devices: auto
     max_epochs: 400
-    limit_train_batches: 0.02
+    limit_train_batches: 0.01
     num_nodes: 1
     precision: 32-true
     callbacks:
@@ -46,7 +46,7 @@ fit:
     label_weight: [20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     model_kwargs:
       iou_head_hidden_dim: 256
-      label_head_hidden_dim: 256
+      label_head_hidden_dim: 128
       
     optimizer_type: AdamW
     optimizer_kwargs:

@@ -13,7 +13,7 @@ class MaskLabelDecoder(MaskDecoder):
         self,
         *,
         label_head_depth,
-        label_head_hidden_dim,
+        label_head_hidden_dim=256,
         **kwargs,
     ) -> None:
         assert "num_multimask_outputs" not in kwargs, "num_multimask_outputs is not supported"
