@@ -199,3 +199,5 @@ imgui.ini
 /processed_data/
 /extracted.pth
 /result/
+*.un~
+*.swp
