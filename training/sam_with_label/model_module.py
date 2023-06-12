@@ -3,6 +3,7 @@ from third_party.segment_anything.build_sam import build_sam_vit_h
 from modeling.build_sam import sam_with_label_model_registry
 from third_party.segment_anything.build_sam import sam_model_registry
 import torch
+import wandb
 import torch.optim as optim
 import torch.nn as nn
 from .losses import SegmentationLoss
@@ -42,6 +43,39 @@ class DiceMetric():
             avg_dice[0] = torch.nan
         mdice = torch.nanmean(avg_dice)
         return mdice, avg_dice
+    
+class LabelMetric():
+    def __init__(self, label_weights):
+        self.reset()
+        self.label_weights = label_weights.cpu()
+
+    @torch.no_grad()
+    def reset(self):
+        self.pd_labels = []
+        self.gt_labels = []
+    
+    @torch.no_grad()
+    def update(self, pd_label, gt_label):
+        self.pd_labels.append(pd_label.cpu())
+        self.gt_labels.append(gt_label.cpu())
+
+    @torch.no_grad()
+    def get_metrics(self):
+        # both accuracy and confusion matrix are computed on the whole dataset
+        pd_labels = torch.cat(self.pd_labels, dim=0)
+        gt_labels = torch.cat(self.gt_labels, dim=0)
+        acc = torch.sum(pd_labels == gt_labels).float() / pd_labels.shape[0]
+        weight = self.label_weights[self.gt_labels]
+        weighted_acc = torch.sum((pd_labels == gt_labels).float() * weight) / torch.sum(weight)
+        confusion_matrix = wandb.plot.confusion_matrix(
+            y_true=gt_labels,
+            preds=pd_labels,
+            class_names=default_label_names,
+            title="Confusion Matrix",
+            normalize="true",
+        )
+        return acc, weighted_acc, confusion_matrix
+        
     
 def iou_func(pred_binary_mask, binary_label):
     B = pred_binary_mask.shape[0]
@@ -144,6 +178,8 @@ class SAMWithLabelModule(pl.LightningModule):
         self.cross_entropy_loss = nn.CrossEntropyLoss(reduction="none").to(self.device)
         self.training_dice_metric = DiceMetric()
         self.validation_dice_metric = DiceMetric()
+        self.training_label_metric = LabelMetric(self.label_weight)
+        self.validation_label_metric = LabelMetric(self.label_weight)
 
         if self.debug:
             visualize.initialize_window()
@@ -190,7 +226,7 @@ class SAMWithLabelModule(pl.LightningModule):
 
         return batch_masks, batch_ious, batch_label
     
-    def get_loss_and_update_metric(self, batch, batch_masks, batch_ious, batch_label, metric, batch_name):
+    def get_loss_and_update_metric(self, batch, batch_masks, batch_ious, batch_label, dice_metric, label_metric, batch_name):
         B = len(batch['embedding'])
 
         segmentation_loss = 0.0
@@ -220,11 +256,12 @@ class SAMWithLabelModule(pl.LightningModule):
             ious[~is_foreground_label].fill_(0.0) # TODO: 这样做是否合适?
             assert (ious.shape[0] == B)
 
-            metric.update(pred_binary_masks[torch.arange(B), mask_cls], binary_label, mask_cls)
+            dice_metric.update(pred_binary_masks[torch.arange(B), mask_cls], binary_label, mask_cls)
         
         iou_loss = ((ious - batch_ious) ** 2).mean()
         label_loss = (self.cross_entropy_loss(batch_label, mask_cls.to(torch.long)) * self.label_weight[mask_cls]).mean()
-
+        
+        label_metric.update(batch_label.argmax(dim=1), mask_cls)
         # if self.debug:
         #     if batch_name is None:
         #         batch_name = "unnamed"
@@ -261,7 +298,7 @@ class SAMWithLabelModule(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         batch_masks, batch_ious, batch_label = self.get_logits(batch)
 
-        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.training_dice_metric, "train_%d" % batch_idx)
+        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.training_dice_metric, self.training_label_metric, "train_%d" % batch_idx)
 
         loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
 
@@ -280,12 +317,21 @@ class SAMWithLabelModule(pl.LightningModule):
         return loss
     
     def on_train_epoch_end(self):
+        acc, weighted_acc, confusion_matric = self.training_label_metric.get_metrics()
+        self.logger.experiment.log(
+            {
+                "train_Label/acc": acc,
+                "train_Label/weighted_acc": weighted_acc,
+                "train_Label/confusion_matrix": confusion_matric
+            }
+        )
         self.training_dice_metric.reset()
+        self.training_label_metric.reset()
     
     def validation_step(self, batch, batch_idx):
         batch_masks, batch_ious, batch_label = self.get_logits(batch)
 
-        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.validation_dice_metric, "val_%d" % batch_idx)
+        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.validation_dice_metric, self.validation_label_metric, "val_%d" % batch_idx)
 
         loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
 
@@ -302,7 +348,16 @@ class SAMWithLabelModule(pl.LightningModule):
         self.log("val_Dice/mDice", mdice)
         for i in range(14):
             self.log("val_Dice/%s" % default_label_names[i], avg_dice[i])
+        acc, weighted_acc, confusion_matric = self.validation_label_metric.get_metrics()
+        self.logger.experiment.log(
+            {
+                "val_Label/acc": acc,
+                "val_Label/weighted_acc": weighted_acc,
+                "val_Label/confusion_matrix": confusion_matric
+            }
+        )
         self.validation_dice_metric.reset()
+        self.validation_label_metric.reset()
 
     def configure_optimizers(self):
         assert self.optimizer_type in ["AdamW"], "Unimplemented"
