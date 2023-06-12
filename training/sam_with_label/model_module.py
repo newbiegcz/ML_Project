@@ -207,13 +207,14 @@ class SAMWithLabelModule(pl.LightningModule):
 
         point_coords = batch['prompt'][:, None, :]
         point_labels = torch.ones((B, 1), dtype=torch.int, device=self.device)
+        prompt_3ds = torch.stack(batch['3d'])
 
         with torch.set_grad_enabled(torch.is_grad_enabled() and self.train_prompt_encoder):
             sparse_embeddings, dense_embeddings = self.model.prompt_encoder(
                                     points=(point_coords, point_labels),
                                     boxes=None,
                                     masks=None,
-                                    prompt_3ds=batch['3d']
+                                    prompt_3ds=prompt_3ds
                                 )
             
         batch_masks, batch_ious, batch_label = self.model.mask_decoder(
