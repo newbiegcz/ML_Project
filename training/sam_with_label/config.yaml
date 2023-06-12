@@ -31,7 +31,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-      name: Data Augmentation with Color Jitter (20 times)
+      name: 带 ROI, 无增广
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -57,8 +57,8 @@ fit:
       gamma: 2
     debug: false
   data:
-    embedding_file_path: "/root/autodl-tmp/embeddings"
-    datapoint_file_path: "/root/autodl-tmp/datapoints"
+    embedding_file_path: "/root/autodl-tmp/data_with_roi"
+    datapoint_file_path: "/root/autodl-tmp/data_with_roi"
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5    # 在服务器应当调整
