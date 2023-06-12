@@ -5,8 +5,7 @@ from .model_module import iou_func
 import torch
 import torch.optim as optim
 import torch.nn as nn
-from sam_grad.build_sam import sam_model_registry
-from modeling.build_sam import pretrained_checkpoints
+from sam_grad.build_sam import sam_with_gradients_model_registry, pretrained_checkpoints
 
 class DiceMetric():
     def __init__(self):
@@ -44,7 +43,7 @@ class DiceMetric():
 class SAMWithInteractiveTraining(pl.LightningModule):
     # init
     def __init__(self, 
-                 model_type: str = "vit_b",
+                 model_type: str = "vit_h",
                  train_image_encoder: bool = False,
                  train_prompt_encoder: bool = True,
                  dice_loss_coef: float = 1.0,
@@ -70,13 +69,20 @@ class SAMWithInteractiveTraining(pl.LightningModule):
 
         # save hyperparameters
         self.save_hyperparameters()
+        self.model_type = model_type
         self.train_image_encoder = train_image_encoder
         self.train_prompt_encoder = train_prompt_encoder
+        self.dice_loss_coef = dice_loss_coef
+        self.focal_loss_coef = focal_loss_coef
+        self.label_loss_coef = label_loss_coef
+        self.iou_loss_coef = iou_loss_coef
+        self.optimizer_type = optimizer_type
+        self.optimizer_kwargs = optimizer_kwargs
         self.debug = debug
 
         # retrieve pretrained model
         self.pretrained_checkpoint = pretrained_checkpoints[model_type]
-        self.model = sam_model_registry[model_type](self.pretrained_checkpoint)
+        self.model = sam_with_gradients_model_registry[model_type](self.pretrained_checkpoint)
 
         # init losses
         self.segmentation_loss = SegmentationLoss(
@@ -272,6 +278,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         assert self.optimizer_type in ["AdamW"], "Unimplemented"
 
         if self.optimizer_type == "AdamW":   
+            print(self.parameters(), self.optimizer_kwargs)
             optimizer = optim.AdamW(self.parameters(), **self.optimizer_kwargs)
         return optimizer
 

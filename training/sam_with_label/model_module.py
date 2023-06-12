@@ -308,5 +308,6 @@ class SAMWithLabelModule(pl.LightningModule):
         assert self.optimizer_type in ["AdamW"], "Unimplemented"
 
         if self.optimizer_type == "AdamW":   
+            print(self.parameters(), **self.optimizer_kwargs)
             optimizer = optim.AdamW(self.parameters(), **self.optimizer_kwargs)
         return optimizer
