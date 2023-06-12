@@ -46,6 +46,7 @@ def _build_sam_with_label(
     encoder_global_attn_indexes,
     checkpoint=None,
     build_encoder=True,
+    **kwargs
 ):
     '''
     Build a SAM model with label head.
@@ -71,7 +72,6 @@ def _build_sam_with_label(
             mask_in_chans=16,
         ),
         mask_decoder=MaskLabelDecoder(
-            num_multimask_outputs=3,
             transformer=TwoWayTransformer(
                 depth=2,
                 embedding_dim=prompt_embed_dim,
@@ -83,8 +83,8 @@ def _build_sam_with_label(
             iou_head_hidden_dim=256,
             label_head_depth=3,
             label_head_hidden_dim=256,
+            **kwargs
         ), 
-        #TODO : hydra
         pixel_mean=[123.675, 116.28, 103.53],
         pixel_std=[58.395, 57.12, 57.375],
     )
@@ -95,7 +95,7 @@ def _build_sam_with_label(
         sam.load_state_dict(state_dict)
     return sam, encoder_builder
 
-def build_sam_with_label_vit_h(checkpoint=None, build_encoder=True):
+def build_sam_with_label_vit_h(checkpoint=None, build_encoder=True, **kwargs):
     '''
     Build a SAM model with label head, using ViT-H as the encoder.
     
@@ -113,9 +113,10 @@ def build_sam_with_label_vit_h(checkpoint=None, build_encoder=True):
         encoder_global_attn_indexes=[7, 15, 23, 31],
         checkpoint=checkpoint,
         build_encoder=build_encoder,
+        **kwargs
     )
 
-def build_sam_with_label_vit_l(checkpoint=None, build_encoder=True):
+def build_sam_with_label_vit_l(checkpoint=None, build_encoder=True, **kwargs):
     '''
     Build a SAM model with label head, using ViT-L as the encoder.
 
@@ -134,9 +135,10 @@ def build_sam_with_label_vit_l(checkpoint=None, build_encoder=True):
         encoder_global_attn_indexes=[5, 11, 17, 23],
         checkpoint=checkpoint,
         build_encoder=build_encoder,
+        **kwargs
     )
 
-def build_sam_with_label_vit_b(checkpoint=None, build_encoder=True):
+def build_sam_with_label_vit_b(checkpoint=None, build_encoder=True, **kwargs):
     '''
     Build a SAM model with label head, using ViT-B as the encoder.
 
@@ -155,6 +157,7 @@ def build_sam_with_label_vit_b(checkpoint=None, build_encoder=True):
         encoder_global_attn_indexes=[2, 5, 8, 11],
         checkpoint=checkpoint,
         build_encoder=build_encoder,
+        **kwargs
     )
 
 sam_with_label_model_registry = {
