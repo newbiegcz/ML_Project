@@ -43,7 +43,7 @@ class Prompt3DEncoder(PromptEncoder):
             return 1
         
     def _embed_prompt_3ds(self, prompt_3ds: torch.Tensor) -> torch.Tensor:
-        return self.position_embedding_3d(prompt_3ds) + self.embedding_3d.weight
+        return (self.position_embedding_3d(prompt_3ds) + self.embedding_3d.weight)[:, None, :]
 
     def forward(
         self,
