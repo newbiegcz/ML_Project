@@ -186,9 +186,10 @@ class SAMWithLabelModule(pl.LightningModule):
         if self.debug:
             visualize.initialize_window()
 
-    def get_logits(self, batch):
+    def get_logits(self, batch, mode):
         # 未来如果实现训练 encoder，一定要记得判断 torch.is_grad_enabled()，避免 validate 时保留梯度
         assert not self.train_image_encoder, "Unimplemented"
+        assert mode in ["training", "validation"]
 
         # if self.debug:
         #     import debug
@@ -211,7 +212,8 @@ class SAMWithLabelModule(pl.LightningModule):
         point_labels = torch.ones((B, 1), dtype=torch.int, device=self.device)
         prompt_3ds = torch.stack(batch['3d']).permute(1, 0).to(torch.float32)
 
-        prompt_3ds = prompt_3ds + self.prompt_3d_std * torch.randn_like(prompt_3ds)
+        if mode == "training":
+            prompt_3ds = prompt_3ds + self.prompt_3d_std * torch.randn_like(prompt_3ds)
 
         with torch.set_grad_enabled(torch.is_grad_enabled() and self.train_prompt_encoder):
             sparse_embeddings, dense_embeddings = self.model.prompt_encoder(
@@ -302,7 +304,7 @@ class SAMWithLabelModule(pl.LightningModule):
 
 
     def training_step(self, batch, batch_idx):
-        batch_masks, batch_ious, batch_label = self.get_logits(batch)
+        batch_masks, batch_ious, batch_label = self.get_logits(batch, "training")
 
         segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.training_dice_metric, self.training_label_metric, "train_%d" % batch_idx)
 
@@ -335,7 +337,7 @@ class SAMWithLabelModule(pl.LightningModule):
         self.training_label_metric.reset()
     
     def validation_step(self, batch, batch_idx):
-        batch_masks, batch_ious, batch_label = self.get_logits(batch)
+        batch_masks, batch_ious, batch_label = self.get_logits(batch, "validation")
 
         segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.validation_dice_metric, self.validation_label_metric, "val_%d" % batch_idx)
 
