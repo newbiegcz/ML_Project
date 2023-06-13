@@ -8,7 +8,6 @@ class PositionalEncoding3D(torch.nn.Module):
     def __init__(self, channels):
         super().__init__()
         self.channels = channels
-        assert channels % 6 == 0
         self.channels_per_dim = channels // 3
         self.inv_freq = 1.0 / (10000 ** (torch.arange(0, self.channels_per_dim, 2).float() / self.channels_per_dim))
     
@@ -20,6 +19,10 @@ class PositionalEncoding3D(torch.nn.Module):
         emb_y = get_emb(points[..., 1] * self.inv_freq)
         emb_z = get_emb(points[..., 2] * self.inv_freq)
         emb = torch.cat((emb_x, emb_y, emb_z), dim=-1)
+        # pad the last dimension of emb to self.channels
+        if emb.shape[-1] < self.channels:
+            assert self.channels - emb.shape[-1] < 3
+            emb = torch.nn.functional.pad(emb, (0, self.channels - emb.shape[-1]))
         return emb
 
     
