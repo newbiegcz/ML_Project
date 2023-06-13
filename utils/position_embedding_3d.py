@@ -15,9 +15,9 @@ class PositionalEncoding3D(torch.nn.Module):
         '''
         :param points: A 2d tensor of size (batch_size, 3)
         '''
-        emb_x = get_emb(points[..., 0] * self.inv_freq)
-        emb_y = get_emb(points[..., 1] * self.inv_freq)
-        emb_z = get_emb(points[..., 2] * self.inv_freq)
+        emb_x = get_emb(points[:, 0].unsqueeze(1) * self.inv_freq.unsqueeze(0))
+        emb_y = get_emb(points[:, 1].unsqueeze(1) * self.inv_freq.unsqueeze(0))
+        emb_z = get_emb(points[:, 2].unsqueeze(1) * self.inv_freq.unsqueeze(0))
         emb = torch.cat((emb_x, emb_y, emb_z), dim=-1)
         # pad the last dimension of emb to self.channels
         if emb.shape[-1] < self.channels:
