@@ -97,7 +97,6 @@ class SamWithLabelPredictor:
         point_labels: Optional[np.ndarray] = None,
         box: Optional[np.ndarray] = None,
         mask_input: Optional[np.ndarray] = None,
-        multimask_output: bool = True,
         return_logits: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -153,19 +152,19 @@ class SamWithLabelPredictor:
             mask_input_torch = torch.as_tensor(mask_input, dtype=torch.float, device=self.device)
             mask_input_torch = mask_input_torch[None, :, :, :]
 
-        masks, iou_predictions, low_res_masks = self.predict_torch(
+        masks, iou_predictions, label_predictions, low_res_masks = self.predict_torch(
             coords_torch,
             labels_torch,
             box_torch,
             mask_input_torch,
-            multimask_output,
             return_logits=return_logits,
         )
 
         masks_np = masks[0].detach().cpu().numpy()
         iou_predictions_np = iou_predictions[0].detach().cpu().numpy()
         low_res_masks_np = low_res_masks[0].detach().cpu().numpy()
-        return masks_np, iou_predictions_np, low_res_masks_np
+        label_predictions_np = label_predictions[0].detach().cpu().numpy()
+        return masks_np, iou_predictions_np, label_predictions_np, low_res_masks_np
 
     @torch.no_grad()
     def predict_torch(
@@ -174,7 +173,6 @@ class SamWithLabelPredictor:
         point_labels: Optional[torch.Tensor],
         boxes: Optional[torch.Tensor] = None,
         mask_input: Optional[torch.Tensor] = None,
-        multimask_output: bool = True,
         return_logits: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -235,7 +233,6 @@ class SamWithLabelPredictor:
             image_pe=self.model.prompt_encoder.get_dense_pe(),
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
-            multimask_output=multimask_output,
         )
 
         # Upscale the masks to the original image resolution

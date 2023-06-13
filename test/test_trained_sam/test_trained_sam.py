@@ -1,22 +1,34 @@
 import cv2
-import segment_anything
+import numpy as np
+from utils.load_extracted_checkpoint import load_extracted_checkpoint
+from modeling.predictor import SamWithLabelPredictor
+import albumentations
+
+model = load_extracted_checkpoint("extracted.pth").cuda()
+predictor = SamWithLabelPredictor(model)
 
 # Load an image
-img = cv2.imread("image.jpg")
+img = cv2.imread("test/test_trained_sam/local_files/image70.jpg")
 
 # Define a font for the text
 font = cv2.FONT_HERSHEY_SIMPLEX
+
+# img = albumentations.CLAHE(p=1.0)(image=img)['image']
+predictor.set_image(img)
 
 # Define a callback function for mouse events
 def mouse_callback(event, x, y, flags, param):
     # If the left button is clicked
     if event == cv2.EVENT_LBUTTONDOWN:
-        # Segment the image at the clicked point
-        seg, label, score = segment_anything.segment(img, x, y)
-        # Create a copy of the image for masking
+        masks, iou_predictions, label_predictions, low_res_masks = predictor.predict(np.array([[x, y]]), np.array([1]))
+        
+        label = label_predictions.argmax()
+        seg = masks[label]
+        score = iou_predictions[label]
+
         mask = img.copy()
         # Update the mask with the segmentation result
-        mask[seg != 0] = seg[seg != 0]
+        mask[seg != 0] = np.array([255, 0, 0])
         # Put the label and score on the mask
         text = f"Label: {label}, Score: {score}"
         cv2.putText(mask, text, (10, 30), font, 1, (255, 255, 255), 2)
