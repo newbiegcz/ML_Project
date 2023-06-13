@@ -105,6 +105,7 @@ class SAMWithLabelModule(pl.LightningModule):
                  label_weight: List[float] = [1.0] * 14,
                  optimizer_type: str = "AdamW",
                  model_kwargs: dict = {},
+                 prompt_3d_std: float = 0.0,
                  optimizer_kwargs: dict = {
                     "lr": 1e-5,
                     "weight_decay": 0.1,
@@ -134,6 +135,7 @@ class SAMWithLabelModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
+        self.prompt_3d_std = prompt_3d_std
         self.pretrained_checkpoint = pretrained_checkpoints[model_type]
         self.model_type = model_type
         self.model_kwargs = model_kwargs
@@ -208,6 +210,8 @@ class SAMWithLabelModule(pl.LightningModule):
         point_coords = batch['prompt'][:, None, :]
         point_labels = torch.ones((B, 1), dtype=torch.int, device=self.device)
         prompt_3ds = torch.stack(batch['3d']).permute(1, 0).to(torch.float32)
+
+        prompt_3ds = prompt_3ds + self.prompt_3d_std * torch.randn_like(prompt_3ds)
 
         with torch.set_grad_enabled(torch.is_grad_enabled() and self.train_prompt_encoder):
             sparse_embeddings, dense_embeddings = self.model.prompt_encoder(
