@@ -94,6 +94,7 @@ transforms = {
 
 class Dataset2D(data.Dataset):
     def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, compress=False):
+        assert False, "This class is deprecated!"
         if first_only:
             files = files.copy()[:1]
 
@@ -158,6 +159,124 @@ class Dataset2D(data.Dataset):
             return t
         else:
             return ret
+
+class Dataset3D(data.Dataset):
+    def __init__(self, files, *, dtype=np.float64, first_only=False, spacing=False, crop_roi=False):
+        if first_only:
+            files = files.copy()[:1]
+        
+        self.crop_roi = crop_roi
+        self.files = files
+        set_track_meta(True)
+        if spacing:
+            _default_transform = Compose(
+                [
+                    LoadImaged(keys=["image", "label"], ensure_channel_first=True, dtype=dtype),
+                    ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True, dtype=dtype),
+                    CropForegroundd(keys=["image", "label"], source_key="image", dtype=dtype),
+                    Orientationd(keys=["image", "label"], axcodes="RAS"),
+                    Spacingd(keys=["image", "label"],pixdim=(0.7, 0.7, 2.0),mode=("bilinear", "nearest")),
+                    EnsureTyped(keys=["image", "label"], device="cpu", track_meta=False, dtype=dtype),
+                ]
+            )
+        else:
+            _default_transform = Compose(
+                [
+                    LoadImaged(keys=["image", "label"], ensure_channel_first=True, dtype=dtype),
+                    ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True, dtype=dtype),
+                    CropForegroundd(keys=["image", "label"], source_key="image", dtype=dtype),
+                    Orientationd(keys=["image", "label"], axcodes="RAS"),
+                    EnsureTyped(keys=["image", "label"], device="cpu", track_meta=False, dtype=dtype),
+                ]
+            )
+        
+        self.cache = CacheDataset(
+            data=files, 
+            transform=_default_transform, 
+            cache_rate=1.0, 
+            num_workers=4
+        )
+        set_track_meta(False)
+
+        if self.crop_roi:
+            cnt = len(self.cache)
+
+            lx = [10000000 for _ in range(cnt)]
+            ly = [10000000 for _ in range(cnt)]
+            lz = [10000000 for _ in range(cnt)]
+            rx = [0 for _ in range(cnt)]
+            ry = [0 for _ in range(cnt)]
+            rz = [0 for _ in range(cnt)]
+            self.transforms = [None] * cnt
+
+            for i in range(cnt):
+                label = self.cache[i]["label"][0]
+                dx, dy, dz = label.shape[0], label.shape[1], label.shape[2]
+                nonzero_indexes = torch.nonzero(label)
+
+                lx[i] = nonzero_indexes[:, 0].min()
+                ly[i] = nonzero_indexes[:, 1].min()
+                lz[i] = nonzero_indexes[:, 2].min()
+                rx[i] = nonzero_indexes[:, 0].max()
+                ry[i] = nonzero_indexes[:, 1].max()
+                rz[i] = nonzero_indexes[:, 2].max()
+                deltaz = int(float(rz[i] - lz[i]) * 0.1)
+                deltax = int(float(rx[i] - lx[i]) * 0.1)
+                deltay = int(float(ry[i] - ly[i]) * 0.1)
+
+                lz[i] = max(0, lz[i] - deltaz)
+                rz[i] = min(dz - 1, rz[i] + deltaz)
+                lx[i] = max(0, lx[i] - deltax)
+                rx[i] = min(dx - 1, rx[i] + deltax)
+                ly[i] = max(0, ly[i] - deltay)
+                ry[i] = min(dy - 1, ry[i] + deltay)
+
+                print(lx[i], rx[i], ly[i], ry[i], lz[i], rz[i])
+
+                # torch interpolate tensor
+                def transform(image, label):
+                    flag = False
+                    if image.dim() == 4:
+                        flag = True
+                        image = image[0]
+                        label = label[0]
+                    image = image[lx[i]:rx[i], ly[i]:ry[i], lz[i]:rz[i]]
+                    label = label[lx[i]:rx[i], ly[i]:ry[i], lz[i]:rz[i]]
+                    image = image.permute(2, 0, 1)
+                    label = label.permute(2, 0, 1)
+                    image = torch.nn.functional.interpolate(image.unsqueeze(0), size=(1024, 1024), mode="bilinear").squeeze(0)
+                    label = torch.nn.functional.interpolate(label.unsqueeze(0), size=(1024, 1024), mode="nearest").squeeze(0)
+                    image = image.permute(1, 2, 0)
+                    label = label.permute(1, 2, 0)
+                    if flag:
+                        image = image.unsqueeze(0)
+                        label = label.unsqueeze(0)
+                    return image, label
+                
+                self.transforms[i] = transform
+
+
+    def __len__(self):
+        return len(self.cache)
+
+    def __getitem__(self, idx):
+        ret = self.cache[idx].copy()
+        if self.crop_roi:
+            ret['image'], ret['label'] = self.transforms[idx](ret['image'], ret['label'])
+        return ret
+    
+def get_dataset_3d(file_key, first_only=False, spacing=False, crop_roi=False):
+    '''
+    A helper function to get a Dataset
+
+    Args:
+        file_key: The key of the file to load, should be one of "training" and "validation"
+        first_only: Whether to load only the first file
+        spacing: Whether to apply spacing transform
+        crop_roi: Whether to crop roi
+    '''
+    assert file_key in data_files.keys(), "Invalid file key!"
+    return Dataset3D(data_files[file_key], first_only=first_only, spacing=spacing, crop_roi=crop_roi)
     
 def get_dataloader_2d(file_key, transform_key, batch_size, shuffle, device=device, first_only=False):
     '''

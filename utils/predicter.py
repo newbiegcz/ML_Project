@@ -55,8 +55,10 @@ class LabelPredicter():
         res = []
         intersection = np.zeros(13,dtype=np.uint64)
         div = np.zeros(13,dtype=np.uint64)
+        idx = 0
         for (image, ground_truth) in tqdm(zip(images, ground_truths), desc="slice"):
-            labels = self.automatic_label_generator.generate_labels(image)
+            height = idx / len(images)
+            labels = self.automatic_label_generator.generate_labels(image, height)
             res.append(labels)
             for i in range(13):
                 prediction_mask = labels == (i+1)
