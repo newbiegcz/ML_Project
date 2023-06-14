@@ -18,6 +18,8 @@ from monai.data import (
     CacheDataset
 )
 
+from data.dataset import get_dataset_3d
+
 from data.dataset import DictTransform, PreprocessForModel
 import torchvision
 import os
@@ -88,33 +90,7 @@ class LabelPredicter():
 
         print the mean dice
         """
-        # get file names
-        files = load_decathlon_datalist(data_list_file_path, True, file_key)
         
-        # get transform
-        transform = torchvision.transforms.Compose(
-            [DictTransform(["image", "label"], torchvision.transforms.Lambda(lambda x: x.unsqueeze(0).repeat(3, 1, 1))),
-            PreprocessForModel(normalize=False)]
-        )
-
-        # read files
-        set_track_meta(True)
-        _default_transform = Compose(
-            [
-                LoadImaged(keys=["image", "label"], ensure_channel_first=True, dtype=np.float64),
-                ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True, dtype=np.float64),
-                CropForegroundd(keys=["image", "label"], source_key="image", dtype=np.float64),
-                Orientationd(keys=["image", "label"], axcodes="RAS"),
-                EnsureTyped(keys=["image", "label"], track_meta=False, dtype=np.float64),
-            ]
-        )
-        cache = CacheDataset(
-            data=files, 
-            transform=_default_transform, 
-            cache_rate=1.0, 
-            num_workers=4
-        )
-        set_track_meta(False)
 
         # predict
         dices = []

@@ -263,8 +263,9 @@ class Dataset3D(data.Dataset):
         ret = self.cache[idx].copy()
         if self.crop_roi:
             ret['image'], ret['label'] = self.transforms[idx](ret['image'], ret['label'])
+        assert ret['image'].dim() == 4, "Invalid image dim!"
         def prompt_3d_func(i, j, k):
-            return np.array([i / ret['image'].shape[0], j / ret['image'].shape[1], k / ret['image'].shape[2]])
+            return np.array([i / ret['image'].shape[1], j / ret['image'].shape[2], k / ret['image'].shape[3]])
         ret['prompt_3d'] = prompt_3d_func
         return ret
     
