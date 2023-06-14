@@ -263,6 +263,9 @@ class Dataset3D(data.Dataset):
         ret = self.cache[idx].copy()
         if self.crop_roi:
             ret['image'], ret['label'] = self.transforms[idx](ret['image'], ret['label'])
+        def prompt_3d_func(i, j, k):
+            return np.array([i / ret['image'].shape[0], j / ret['image'].shape[1], k / ret['image'].shape[2]])
+        ret['prompt_3d'] = prompt_3d_func
         return ret
     
 def get_dataset_3d(file_key, first_only=False, spacing=False, crop_roi=False):
