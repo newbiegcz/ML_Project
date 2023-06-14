@@ -97,6 +97,7 @@ class SamWithLabelPredictor:
         point_labels: Optional[np.ndarray] = None,
         box: Optional[np.ndarray] = None,
         mask_input: Optional[np.ndarray] = None,
+        prompt_3d: Optional[np.ndarray] = None,
         return_logits: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -151,12 +152,17 @@ class SamWithLabelPredictor:
         if mask_input is not None:
             mask_input_torch = torch.as_tensor(mask_input, dtype=torch.float, device=self.device)
             mask_input_torch = mask_input_torch[None, :, :, :]
+        if prompt_3d is not None:
+           assert self.original_size == (1024, 1024), "prompt_3d is only supported for 1024x1024 images."
+           prompt_3d_torch = torch.as_tensor(prompt_3d, dtype=torch.float, device=self.device)
+           prompt_3d_torch = prompt_3d_torch[None, :]
 
         masks, iou_predictions, label_predictions, low_res_masks = self.predict_torch(
             coords_torch,
             labels_torch,
             box_torch,
             mask_input_torch,
+            prompt_3d_torch,
             return_logits=return_logits,
         )
 
@@ -173,6 +179,7 @@ class SamWithLabelPredictor:
         point_labels: Optional[torch.Tensor],
         boxes: Optional[torch.Tensor] = None,
         mask_input: Optional[torch.Tensor] = None,
+        prompt_3ds: Optional[torch.Tensor] = None,
         return_logits: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -225,6 +232,7 @@ class SamWithLabelPredictor:
             points=points,
             boxes=boxes,
             masks=mask_input,
+            prompt_3ds=prompt_3ds,
         )
 
         # Predict masks
