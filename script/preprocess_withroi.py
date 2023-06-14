@@ -61,10 +61,11 @@ checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
 datapoints_disk_path = "/root/autodl-tmp/data_with_roi/datapoints"
 embedding_disk_path = "/root/autodl-tmp/data_with_roi/embeddings"
 
-size_threshold_in_bytes= 200 * 1024 * 1024 * 1024 # 200 GB
+size_threshold_in_bytes= 500 * 1024 * 1024 * 1024 # 500 GB
 debug = False
-times = 1 # The number of times to augment an image
-datapoints_for_training = 5000000 # The number of datapoints to use for training
+times = 15 # The number of times to augment an image
+time_points = 1000
+datapoints_for_training = 10000000 # The number of datapoints to use for training
 datapoints_for_validation = 100000 # The number of datapoints to use for validation
 
 datapoints_cache = diskcache.Cache(datapoints_disk_path, eviction_policy = "none")
@@ -117,58 +118,47 @@ def wrap_with_torchseed(func, seed=None):
                 return func(*args, **kwargs)
     return wrapper
 
-class RandCmap:
-    cmaps = [plt.get_cmap(c) for c in all_cmaps if c not in exclude]
-    def __init__(self, use_torch=True):
-        self.use_torch = use_torch
-    def __call__(self, x, **kwargs):
-        if len(x.shape) == 3:
-            if self.use_torch:
-                assert x.shape[0] == 1
-                x = x[0]
-            else :
-                assert x.shape[2] == 1
-                x = x[:, :, 0]
-        y = self.cmaps[torch.randint(0, len(self.cmaps), (1,))](x)
-        if self.use_torch:
-            y = y[:, :, :3].transpose(2, 0, 1) # remove alpha channel and move channel to the front
-            return torch.from_numpy(y)
-        else:
-            return y[:, :, :3]
-
-def wrap_albumentations_transform(transform):
-    def wrapper(x):
-        res = transform(image=x['image'], mask=x['label'])
-        return {
-            'image': res['image'],
-            'label': res['mask']
-        }
-    return wrapper
-
 def unsqueeze(x, **kwargs):
     return x.reshape(x.shape + (1,))
-            
-def gen_clache(**kwargs):
-    return albumentations.Compose([
-        albumentations.FromFloat(dtype="uint8"),
-        albumentations.CLAHE(**kwargs),
-        albumentations.ToFloat()
-    ])
 
-transform_2d_withnoaugmentation = (
+def extend(x, **kwargs):
+    w, h, z = x.shape
+    assert(z == 1)
+    acc = np.tile(np.arange(w), (h, 1)).T.reshape((w, h, 1))
+    bcc = np.tile(np.arange(h), (w, 1)).reshape((w, h, 1))
+    res = np.concatenate((x, acc, bcc), axis = 2)
+    return res
+
+def extend2(x, **kwargs):
+    return np.repeat(x, 3, axis=2)
+
+pixel_mean=(np.array([123.675, 116.28, 103.53]) / 255).tolist()
+pixel_std=(np.array([58.395, 57.12, 57.375]) / 255).tolist()
+
+new_train_transform = (
     wrap_with_torchseed(
-        torchvision.transforms.Compose([
-            DictTransform(["image", "label"], lambda x : x.numpy()),
-            wrap_albumentations_transform(
-                albumentations.Compose([
-                    albumentations.Lambda(image=unsqueeze, mask=unsqueeze),
-                    gen_clache(p=1),
-                    albumentations.pytorch.transforms.ToTensorV2(transpose_mask=True)
-                ])
-            ),
-            PreprocessForModel(normalize=True),
-        ])
+        albumentations.Compose([
+            albumentations.Lambda(image=lambda x, **kwargs : x.reshape(x.shape + (1,)).repeat(3, axis=2), 
+                                    mask=lambda x, **kwargs : x.reshape(x.shape + (1,))),
+            albumentations.Resize(height=512, width=512, p=1),
+            albumentations.ColorJitter(brightness=0.5, contrast=0.2, saturation=0.2, hue=0.2, p=0.5),
+            albumentations.CropNonEmptyMaskIfExists(256, 256, p=0.5),
+            albumentations.HorizontalFlip(p=0.5),
+            albumentations.VerticalFlip(p=0.5),
+            albumentations.RandomRotate90(p=0.5),
+            albumentations.Resize(height=1024, width=1024, p=1),
+            albumentations.Normalize(pixel_mean, pixel_std, max_pixel_value=1.0),
+        ], keypoint_params=albumentations.KeypointParams(format='yx', remove_invisible = False))
     )
+)
+
+new_val_transform = (
+    albumentations.Compose([
+        albumentations.Lambda(image=lambda x, **kwargs : x.reshape(x.shape + (1,)).repeat(3, axis=2), 
+                                mask=lambda x, **kwargs : x.reshape(x.shape + (1,))),
+        albumentations.Resize(height=1024, width=1024, p=1),
+        albumentations.Normalize(pixel_mean, pixel_std, max_pixel_value=1.0),
+    ], keypoint_params=albumentations.KeypointParams(format='yx', remove_invisible = False))
 )
 
 class Dataset2D(data.Dataset):
@@ -187,8 +177,8 @@ class Dataset2D(data.Dataset):
                     ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True, dtype=dtype),
                     CropForegroundd(keys=["image", "label"], source_key="image", dtype=dtype),
                     Orientationd(keys=["image", "label"], axcodes="RAS"),
+                    Spacingd(keys=["image", "label"],pixdim=(0.7, 0.7, 2.0),mode=("bilinear", "nearest")),
                     EnsureTyped(keys=["image", "label"], device=self.device, track_meta=False, dtype=dtype),
-                    Spacingd(keys=["image", "label"],pixdim=(1.0, 1.0, 2.0),mode=("bilinear", "nearest")),
                 ]
             )
         else:
@@ -243,26 +233,24 @@ seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
 data_files_training = data_files["training"]
 data_files_validation = data_files["validation"]
-rraw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 rraw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
+rraw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 
-def gen_training(img):
-    image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
+def gen_training(img, image_seed):
     with TorchSeed(image_seed):
-        d = transform_2d_withnoaugmentation(img, seed=image_seed+1)
+        d = new_train_transform(image = img["image"], mask = img["label"], keypoints = img["keypoints"], seed=image_seed)
     return d
 
-def gen_validation(img):
-    image_seed = torch.randint(1000000, (1,), generator=seed_rng).item()
+def gen_validation(img, image_seed):
     with TorchSeed(image_seed):
-        d = transform_2d_withnoaugmentation(img, seed=image_seed+1)
+        d = new_val_transform(image = img["image"], mask = img["label"], keypoints = img["keypoints"], seed=image_seed)
     return d
+
+def In(x, y):
+    return x >= 0 and y >= 0 and x < 1024 and y < 1024
 
 train_c = len(rraw_dataset_training)
 val_c = len(rraw_dataset_validation)
-print(train_c)
-print(val_c)
-
 # lst = [0 for _ in range(14)]
 
 #for i in range(train_c):
@@ -274,18 +262,21 @@ print(val_c)
 #                lst[int(label[k][h].clone())] += 1
 
 # print(lst)
-
+import torch.nn.functional
 print("doing preprocess...")
+batch_size = 4
 
-def preprocess(rraw_dataset, c, gen):
+def preprocess(rraw_dataset, c, gen, times, is_training):
     res = []
+
+    lx = [10000000 for _ in range(c)]
+    ly = [10000000 for _ in range(c)]
+    lz = [10000000 for _ in range(c)]
+    rx = [0 for _ in range(c)]
+    ry = [0 for _ in range(c)]
+    rz = [0 for _ in range(c)]
+
     for i in range(c):
-        lz = 10000000
-        rz = 0
-        lx = 10000000
-        rx = 0
-        ly = 10000000
-        ry = 0
         dz = len(rraw_dataset.data_list[i])
         dx, dy = rraw_dataset.data_list[i][0]["label"].shape
         for j in range(dz):
@@ -293,116 +284,140 @@ def preprocess(rraw_dataset, c, gen):
             if nonzero_indexes.shape[0] == 0:
                 continue
             else:
-                lz = min(lz, j)
-                rz = max(rz, j)
+                lz[i] = min(lz[i], j)
+                rz[i] = max(rz[i], j)
                 x1 = nonzero_indexes[:, 0].min().item()
                 x2 = nonzero_indexes[:, 0].max().item()
                 y1 = nonzero_indexes[:, 1].min().item()
                 y2 = nonzero_indexes[:, 1].max().item()
 
-                lx = min(lx, x1)
-                rx = max(rx, x2)
-                ly = min(ly, y1)
-                ry = max(ry, y2)
+                lx[i] = min(lx[i], x1)
+                rx[i] = max(rx[i], x2)
+                ly[i] = min(ly[i], y1)
+                ry[i] = max(ry[i], y2)
     
-        deltaz = int(float(rz - lz) * 0.05)
-        deltax = int(float(rx - lx) * 0.05)
-        deltay = int(float(ry - ly) * 0.05)
+        deltaz = int(float(rz[i] - lz[i]) * 0.1)
+        deltax = int(float(rx[i] - lx[i]) * 0.1)
+        deltay = int(float(ry[i] - ly[i]) * 0.1)
 
-        lz = max(0, lz - deltaz)
-        rz = min(dz - 1, rz + deltaz)
-        lx = max(0, lx - deltax)
-        rx = min(dx - 1, rx + deltax)
-        ly = max(0, ly - deltay)
-        ry = min(dy - 1, ry + deltay)
-        print(lx, rx, ly, ry, lz, rz)
-    
-        for j in range(lz, rz + 1):
-            img = rraw_dataset.data_list[i][j]["image"][lx : rx + 1, ly : ry + 1].clone()
-            label = rraw_dataset.data_list[i][j]["label"][lx : rx + 1, ly : ry + 1].clone()
+        lz[i] = max(0, lz[i] - deltaz)
+        rz[i] = min(dz - 1, rz[i] + deltaz)
+        lx[i] = max(0, lx[i] - deltax)
+        rx[i] = min(dx - 1, rx[i] + deltax)
+        ly[i] = max(0, ly[i] - deltay)
+        ry[i] = min(dy - 1, ry[i] + deltay)
+        print(lx[i], rx[i], ly[i], ry[i], lz[i], rz[i])
+
+    num_image = 0
+    for i in range(c):
+        num_image += ((rz[i] - lz[i] + 1) * times)
+        
+    print(num_image)
+
+    lst_points = np.zeros((num_image, 14, time_points, 4), dtype=np.float32)
+    lengths = np.zeros((num_image, 14), dtype=np.int32)
+    idi = 0
+
+    img_list = []
+    label_list = []
+    num_image = 0
+
+    for i in range(c):
+        for j in tqdm(range(lz[i], rz[i] + 1)):
+            img = rraw_dataset.data_list[i][j]["image"][lx[i] : rx[i] + 1, ly[i] : ry[i] + 1].clone()
+            label = rraw_dataset.data_list[i][j]["label"][lx[i] : rx[i] + 1, ly[i] : ry[i] + 1].clone()
+            x, y = img.shape 
+            ids = np.zeros((x, y), dtype = np.int32)
+            coords = np.zeros((x * y, 2), dtype = np.int32)
+            nums = np.zeros((14), dtype = np.int32)
+            pnt_lst = np.zeros((14, time_points * 10), dtype = np.int32)
             cur = dict()
-            cur["image"] = img
-            cur["label"] = label
-            apt = gen(cur)
-            apt["h"] = float(j - lz) / float(rz - lz)
-            res.append(apt)
+            cur["image"] = img.numpy()
+            cur["label"] = label.numpy()
+            cur["keypoints"] = []
+            for k in range(x):
+                for h in range(y):
+                    coords[k * y + h][0] = k
+                    coords[k * y + h][1] = h
 
-    return res
+            coords = coords[np.random.permutation(coords.shape[0])]
+            for k in range(x * y):
+                xx = coords[k][0]
+                yy = coords[k][1]
+                lbl = int(label[xx][yy])
+                if nums[lbl] < time_points * 10:
+                    ids[xx][yy] = len(cur["keypoints"])
+                    pnt_lst[lbl][nums[lbl]] = ids[xx][yy]
+                    cur["keypoints"].append([xx, yy])
+                    nums[lbl] += 1
 
-raw_dataset_training = preprocess(rraw_dataset_training, train_c, gen_training)
-raw_dataset_validation = preprocess(rraw_dataset_validation, val_c, gen_validation)
+            for k in range(times):
+                image_seed = torch.randint(1000000, (1,), generator=seed_rng).item() + 1
+                if is_training:
+                    image_cache[("seed", idi)] = image_seed
+                    
+                apt = gen(cur, image_seed)
+                apt["image"] = torch.tensor(apt["image"]).permute(2, 0, 1)
+                apt["mask"] = torch.tensor(apt["mask"]).permute(2, 0, 1)
+                apt["h"] = float(j - lz[i]) / float(rz[i] - lz[i])
+                for h in range(14):
+                    if nums[h] == 0:
+                        continue
+                    else:
+                        for p in range(nums[h]):
+                            if lengths[idi][h] >= time_points:
+                                break
+                            id = pnt_lst[h][p]
+                            xx = cur["keypoints"][id][0]
+                            yy = cur["keypoints"][id][1]
+                            assert(label[xx][yy] == h)
+                            if In(int(apt["keypoints"][id][0]), int(apt["keypoints"][id][1])):
+                                if (int(apt["mask"][0][int(apt["keypoints"][id][0])][int(apt["keypoints"][id][1])]) == h):
+                                    lst_points[idi][h][lengths[idi][h]][0] = int(apt["keypoints"][id][1])
+                                    lst_points[idi][h][lengths[idi][h]][1] = int(apt["keypoints"][id][0])
+                                    lst_points[idi][h][lengths[idi][h]][2] = xx / x
+                                    lst_points[idi][h][lengths[idi][h]][3] = yy / y
+                                    lengths[idi][h] += 1
 
-print("doing image encoding for training...")
-import torch.nn.functional
+                apt["keypoints"] = []
 
-batch_size = 1
+                idi += 1
 
-img_list = []
-label_list = []
-num_image_training = 0
+                img_list.append(apt["image"])
+                label_list.append(apt["mask"])
+                if (len(img_list) >= batch_size):
+                    img = torch.stack(img_list)
 
-for i in tqdm(range(len(raw_dataset_training))):
-    for j in range(times):
-        image = raw_dataset_training[i]
-        img_list.append(image["image"])
-        label_list.append(image["label"])
-        if (len(img_list) >= batch_size):
-            img = torch.stack(img_list)
+                    with torch.inference_mode():
+                        embeddings = encoder(img.cuda()).cpu()
 
-            with torch.inference_mode():
-                embeddings = encoder(img.cuda()).cpu()
-
-            for k in range(batch_size):
-                cur = dict()
-                cur["embedding"] = embeddings[k].clone()
-                cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
-                cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
-                cur["h"] = image["h"]
-                image_cache[("training", num_image_training + k)] = cur
+                        for p in range(batch_size):
+                            img_emb = dict()
+                            img_emb["embedding"] = embeddings[p].clone()
+                            img_emb["low_res_image"] = (torch.nn.functional.interpolate(img[p].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
+                            img_emb["label"] = torch.tensor(label_list[p], dtype=torch.uint8).clone()
+                            img_emb["h"] = apt["h"]
+                            if is_training:
+                                image_cache[("training", num_image + p)] = img_emb
+                            else:
+                                image_cache[("validation", num_image + p)] = img_emb
     
-            num_image_training += batch_size
-            img_list = []
-            label_list = []
+       
+                        num_image += batch_size
+                        img_list = []
+                        label_list = []
 
-        if image_cache.volume() > size_threshold_in_bytes:
-            break
+    if is_training:
+        image_cache["num_image_for_training"] = num_image
+        print("training encoding done! The total number of image is %d." % (num_image))
+    else:
+        print("validation encoding done! The total number of image is %d." % (num_image))
+        image_cache["num_image_for_validation"] = num_image
 
-    if image_cache.volume() > size_threshold_in_bytes:
-        break
+    return lst_points, lengths
 
-print("encoding for training data done by encode %d embeddings, the total estimate number of image is %d." % (num_image_training, len(raw_dataset_training) * times))
-image_cache["num_image_for_training"] = num_image_training
-
-print("doing image encoding for validation...")
-
-img_list = []
-label_list = []
-num_image_validation = 0
-
-for i in tqdm(range(len(raw_dataset_validation))):
-    image = raw_dataset_validation[i]
-    img_list.append(image["image"])
-    label_list.append(image["label"])
-    if (len(img_list) >= batch_size):
-        img = torch.stack(img_list)
-
-        with torch.inference_mode():
-            embeddings = encoder(img.cuda()).cpu()
-
-        for k in range(batch_size):
-            cur = dict()
-            cur["embedding"] = embeddings[k].clone()
-            cur["low_res_image"] = (torch.nn.functional.interpolate(img[k].unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False) * PreprocessForModel.pixel_std + PreprocessForModel.pixel_mean).clone()
-            cur["label"] = torch.tensor(label_list[k], dtype=torch.uint8).clone()
-            cur["h"] = image["h"]
-            image_cache[("validation", num_image_validation + k)] = cur
-    
-        num_image_validation += batch_size
-        img_list = []
-        label_list = []
-
-print("validation encoding done! The total number of image is %d." % (num_image_validation))
-image_cache["num_image_for_validation"] = num_image_validation
+lst_points_training, length_training = preprocess(rraw_dataset_training, train_c, gen_training, times, is_training = True)
+lst_points_validation, length_validation = preprocess(rraw_dataset_validation, val_c, gen_validation, 1, is_training = False)
 
 def bounding_box(label):
     nonzero_indexes = torch.nonzero(label)
@@ -436,51 +451,13 @@ print("generating training datapoints...")
 
 POINT = namedtuple("POINT", ["image_id", "mask_cls", "prompt_point"])
 
-lst_points = np.zeros((num_image_training, 14, times, 2), dtype=np.int32)
 label_list = [[] for _ in range(14)]
 for i in tqdm(range(num_image_training)):
-    label = image_cache[("training", i)]["label"][0]
     for j in range(0, 14):
-        if torch.count_nonzero(label == j) > 0:
+        if length_training[i][j] > 0:
             label_list[j].append(i)
-            nonzero_indexes = torch.nonzero(label == j)
-            inds = torch.randint(len(nonzero_indexes), (times,), generator=seed_rng)
-            for k in range(times):
-                lst_points[i, j, k, 0] = nonzero_indexes[inds[k]][1]
-                lst_points[i, j, k, 1] = nonzero_indexes[inds[k]][0]
 
 for i in tqdm(range(datapoints_for_training)):
-    while True:
-        cur_label = torch.randint(14, (1,), generator=seed_rng).item()
-        if (len(label_list[cur_label]) > 0):
-            break
-
-    image_index = torch.randint(len(label_list[cur_label]), (1,), generator=seed_rng).item()
-    image_index = label_list[cur_label][image_index]
-    id = torch.randint(times, (1,), generator=seed_rng).item()
-
-    datum = POINT(image_id = int(image_index), mask_cls = int(cur_label), prompt_point = list(lst_points[image_index, cur_label, id]))
-
-    datapoints_cache[("training", i)] = datum
-
-print("training datapoints completed!The number of total datapoints is %d." % (datapoints_for_training))
-datapoints_cache["num_datapoints_for_training"] = datapoints_for_training
-
-print("generating validation datapoints...")
-lst_points = np.zeros((num_image_validation, 14, times, 2), dtype=np.int32)
-label_list = [[] for _ in range(14)]
-for i in tqdm(range(num_image_validation)):
-    label = image_cache[("validation", i)]["label"][0]
-    for j in range(0, 14):
-        if torch.count_nonzero(label == j) > 0:
-            label_list[j].append(i)
-            nonzero_indexes = torch.nonzero(label == j)
-            inds = torch.randint(len(nonzero_indexes), (times,), generator=seed_rng)
-            for k in range(times):
-                lst_points[i, j, k, 0] = nonzero_indexes[inds[k]][1]
-                lst_points[i, j, k, 1] = nonzero_indexes[inds[k]][0]
-
-for i in tqdm(range(datapoints_for_validation)):
     while True:
         cur_label = torch.randint(14, (1,), generator=seed_rng).item()
         if (len(label_list[cur_label]) > 0):
@@ -488,9 +465,33 @@ for i in tqdm(range(datapoints_for_validation)):
     
     image_index = torch.randint(len(label_list[cur_label]), (1,), generator=seed_rng).item()
     image_index = label_list[cur_label][image_index]
-    id = torch.randint(times, (1,), generator=seed_rng).item()
+    id = torch.randint(length_training[image_index][cur_label], (1,), generator=seed_rng).item()
 
-    datum = POINT(image_id = int(image_index), mask_cls = int(cur_label), prompt_point = list(lst_points[image_index, cur_label, id]))
+    datum = POINT(image_id = int(image_index), mask_cls = int(cur_label), prompt_point = list(lst_points_training[image_index, cur_label, id]))
+
+    datapoints_cache[("training", i)] = datum
+
+print("training datapoints completed!The number of total datapoints is %d." % (datapoints_for_training))
+datapoints_cache["num_datapoints_for_training"] = datapoints_for_training
+
+print("generating validation datapoints...")
+label_list = [[] for _ in range(14)]
+for i in tqdm(range(num_image_validation)):
+    for j in range(0, 14):
+        if length_validation[i][j] > 0:
+            label_list[j].append(i)
+
+for i in tqdm(range(datapoints_for_validation)):
+    while True:
+        cur_label = torch.randint(14, (1,), generator=seed_rng).item()
+        if (len(label_list[cur_label]) > 0):
+            break
+        
+    image_index = torch.randint(len(label_list[cur_label]), (1,), generator=seed_rng).item()
+    image_index = label_list[cur_label][image_index]
+    id = torch.randint(length_validation[image_index][cur_label], (1,), generator=seed_rng).item()
+
+    datum = POINT(image_id = int(image_index), mask_cls = int(cur_label), prompt_point = list(lst_points_validation[image_index, cur_label, id]))
 
     datapoints_cache[("validation", i)] = datum
 
@@ -513,7 +514,8 @@ if debug:
                           label_name=viz.default_label_names,
                              extras={
                               "prompt": prompt_point,
-                              "prompt_label": viz.default_label_names[cls]
+                              "prompt_label": viz.default_label_names[cls],
+                              "coordinate": (prompt_point[2], prompt_point[3])
                           }
             )
 

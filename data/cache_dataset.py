@@ -29,9 +29,10 @@ class DiskCacheDataset(Dataset):
 
     def __getitem__(self, idx):
         res = dict()
-        res["embedding"] = self.embedding_cache[(self.key, self.datapoint_cache[(self.key, idx)].image_id)]["embedding"]
-        res["label"] = self.embedding_cache[(self.key, self.datapoint_cache[(self.key, idx)].image_id)]["label"]
+        im_id = self.datapoint_cache[(self.key, idx)].image_id
+        res["embedding"] = self.embedding_cache[(self.key, im_id)]["embedding"]
+        res["label"] = self.embedding_cache[(self.key, im_id)]["label"]
         res["mask_cls"] = self.datapoint_cache[(self.key, idx)].mask_cls
-        res["prompt"] = self.datapoint_cache[(self.key, idx)].prompt_point
-        res["3d"] = [res["prompt"][0] / 1024, res["prompt"][1] / 1024, self.embedding_cache[(self.key, self.datapoint_cache[(self.key, idx)].image_id)]["h"]]
+        res["prompt"] = [self.datapoint_cache[(self.key, idx)].prompt_point[0], self.datapoint_cache[(self.key, idx)].prompt_point[1]]
+        res["3d"] = [self.datapoint_cache[(self.key, idx)].prompt_point[2], self.datapoint_cache[(self.key, idx)].prompt_point[3], self.embedding_cache[(self.key, im_id)]["h"]]
         return res

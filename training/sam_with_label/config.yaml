@@ -41,12 +41,13 @@ fit:
     train_prompt_encoder: true
     dice_loss_coef: 0.05
     focal_loss_coef: 1
-    label_loss_coef: 0.1 # 较大的值
+    label_loss_coef: 0.1 # to check
     iou_loss_coef: 1.0
     label_weight: [20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     model_kwargs:
       iou_head_hidden_dim: 256
-      label_head_hidden_dim: 128
+      label_head_hidden_dim: 256
+    prompt_3d_std: 0.2 # to check
       
     optimizer_type: AdamW
     optimizer_kwargs:

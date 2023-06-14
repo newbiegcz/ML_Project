@@ -1,5 +1,6 @@
 from functools import partial
 from .sam import SamWithLabel
+from .prompt_encoder import Prompt3DEncoder
 import torch
 
 from third_party.segment_anything.modeling.image_encoder import ImageEncoderViT
@@ -65,7 +66,7 @@ def _build_sam_with_label(
     encoder_builder = get_encoder_builder(encoder_embed_dim, encoder_depth, encoder_num_heads, encoder_global_attn_indexes)
     sam = SamWithLabel(
         image_encoder=encoder_builder() if build_encoder else None,
-        prompt_encoder=PromptEncoder(
+        prompt_encoder=Prompt3DEncoder(
             embed_dim=prompt_embed_dim,
             image_embedding_size=(image_embedding_size, image_embedding_size),
             input_image_size=(image_size, image_size),
