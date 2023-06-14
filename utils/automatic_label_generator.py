@@ -330,12 +330,17 @@ class SamAutomaticLabelGenerator():
 
         # Run model on this batch
         transformed_points = self.predictor.transform.apply_coords(points, im_size)
-        in_points = torch.as_tensor(transformed_points, device=self.predictor.device)
+        in_points = torch.as_tensor(transformed_points, dtype=torch.float, device=self.predictor.device)
         in_labels = torch.ones(in_points.shape[0], dtype=torch.int, device=in_points.device)
         in_points = in_points[:, None, :] # Bx1x2
         in_labels = in_labels[:, None] # Bx1
         prompt_3ds = torch.cat((in_points[:, :, 1:2] / im_size[1], in_points[:, :, 0:1] / im_size[0]
                                 , torch.tensor([[[height]] * 1] * in_points.shape[0], device=self.predictor.device)), dim=2) # Bx1x3
+        prompt_3ds = prompt_3ds[:, 0, :].type(torch.float) # Bx3
+
+        #print('in_points.shape:', in_points.shape)
+        #print('in_labels.shape:', in_labels.shape)
+        #print('prompt_3ds.shape:', prompt_3ds.shape)
         masks, iou_preds, label_preds, _ = self.predictor.predict_torch(
             in_points,
             in_labels,

@@ -1,3 +1,4 @@
+from functools import partial
 import torch
 import torchvision
 import numpy as np
@@ -161,6 +162,26 @@ class Dataset2D(data.Dataset):
             return ret
 
 class Dataset3D(data.Dataset):
+    # torch interpolate tensor
+    def transform(self, image, label, i):
+        flag = False
+        if image.dim() == 4:
+            flag = True
+            image = image[0]
+            label = label[0]
+        image = image[self.lx[i]:self.rx[i]+1, self.ly[i]:self.ry[i]+1, self.lz[i]:self.rz[i]+1]
+        label = label[self.lx[i]:self.rx[i]+1, self.ly[i]:self.ry[i]+1, self.lz[i]:self.rz[i]+1]
+        image = image.permute(2, 0, 1)
+        label = label.permute(2, 0, 1)
+        image = torch.nn.functional.interpolate(image.unsqueeze(0), size=(1024, 1024), mode="bilinear").squeeze(0)
+        label = torch.nn.functional.interpolate(label.unsqueeze(0), size=(1024, 1024), mode="nearest").squeeze(0)
+        image = image.permute(1, 2, 0)
+        label = label.permute(1, 2, 0)
+        if flag:
+            image = image.unsqueeze(0)
+            label = label.unsqueeze(0)
+        return image, label
+    
     def __init__(self, files, *, dtype=np.float64, first_only=False, spacing=False, crop_roi=False):
         if first_only:
             files = files.copy()[:1]
@@ -197,63 +218,41 @@ class Dataset3D(data.Dataset):
             num_workers=4
         )
         set_track_meta(False)
+        
 
         if self.crop_roi:
             cnt = len(self.cache)
 
-            lx = [10000000 for _ in range(cnt)]
-            ly = [10000000 for _ in range(cnt)]
-            lz = [10000000 for _ in range(cnt)]
-            rx = [0 for _ in range(cnt)]
-            ry = [0 for _ in range(cnt)]
-            rz = [0 for _ in range(cnt)]
-            self.transforms = [None] * cnt
+            self.lx = [10000000 for _ in range(cnt)]
+            self.ly = [10000000 for _ in range(cnt)]
+            self.lz = [10000000 for _ in range(cnt)]
+            self.rx = [0 for _ in range(cnt)]
+            self.ry = [0 for _ in range(cnt)]
+            self.rz = [0 for _ in range(cnt)]
 
             for i in range(cnt):
                 label = self.cache[i]["label"][0]
                 dx, dy, dz = label.shape[0], label.shape[1], label.shape[2]
                 nonzero_indexes = torch.nonzero(label)
 
-                lx[i] = nonzero_indexes[:, 0].min()
-                ly[i] = nonzero_indexes[:, 1].min()
-                lz[i] = nonzero_indexes[:, 2].min()
-                rx[i] = nonzero_indexes[:, 0].max()
-                ry[i] = nonzero_indexes[:, 1].max()
-                rz[i] = nonzero_indexes[:, 2].max()
-                deltaz = int(float(rz[i] - lz[i]) * 0.1)
-                deltax = int(float(rx[i] - lx[i]) * 0.1)
-                deltay = int(float(ry[i] - ly[i]) * 0.1)
+                self.lx[i] = nonzero_indexes[:, 0].min()
+                self.ly[i] = nonzero_indexes[:, 1].min()
+                self.lz[i] = nonzero_indexes[:, 2].min()
+                self.rx[i] = nonzero_indexes[:, 0].max()
+                self.ry[i] = nonzero_indexes[:, 1].max()
+                self.rz[i] = nonzero_indexes[:, 2].max()
+                deltaz = int(float(self.rz[i] - self.lz[i]) * 0.1)
+                deltax = int(float(self.rx[i] - self.lx[i]) * 0.1)
+                deltay = int(float(self.ry[i] - self.ly[i]) * 0.1)
 
-                lz[i] = max(0, lz[i] - deltaz)
-                rz[i] = min(dz - 1, rz[i] + deltaz)
-                lx[i] = max(0, lx[i] - deltax)
-                rx[i] = min(dx - 1, rx[i] + deltax)
-                ly[i] = max(0, ly[i] - deltay)
-                ry[i] = min(dy - 1, ry[i] + deltay)
+                self.lz[i] = max(0, self.lz[i] - deltaz)
+                self.rz[i] = min(dz - 1, self.rz[i] + deltaz)
+                self.lx[i] = max(0, self.lx[i] - deltax)
+                self.rx[i] = min(dx - 1, self.rx[i] + deltax)
+                self.ly[i] = max(0, self.ly[i] - deltay)
+                self.ry[i] = min(dy - 1, self.ry[i] + deltay)
 
-                print(lx[i], rx[i], ly[i], ry[i], lz[i], rz[i])
-
-                # torch interpolate tensor
-                def transform(image, label):
-                    flag = False
-                    if image.dim() == 4:
-                        flag = True
-                        image = image[0]
-                        label = label[0]
-                    image = image[lx[i]:rx[i], ly[i]:ry[i], lz[i]:rz[i]]
-                    label = label[lx[i]:rx[i], ly[i]:ry[i], lz[i]:rz[i]]
-                    image = image.permute(2, 0, 1)
-                    label = label.permute(2, 0, 1)
-                    image = torch.nn.functional.interpolate(image.unsqueeze(0), size=(1024, 1024), mode="bilinear").squeeze(0)
-                    label = torch.nn.functional.interpolate(label.unsqueeze(0), size=(1024, 1024), mode="nearest").squeeze(0)
-                    image = image.permute(1, 2, 0)
-                    label = label.permute(1, 2, 0)
-                    if flag:
-                        image = image.unsqueeze(0)
-                        label = label.unsqueeze(0)
-                    return image, label
-                
-                self.transforms[i] = transform
+                print(self.lx[i], self.rx[i], self.ly[i], self.ry[i], self.lz[i], self.rz[i])
 
 
     def __len__(self):
@@ -262,11 +261,12 @@ class Dataset3D(data.Dataset):
     def __getitem__(self, idx):
         ret = self.cache[idx].copy()
         if self.crop_roi:
-            ret['image'], ret['label'] = self.transforms[idx](ret['image'], ret['label'])
+            ret['image'], ret['label'] = self.transform(ret['image'], ret['label'], idx)
         assert ret['image'].dim() == 4, "Invalid image dim!"
-        def prompt_3d_func(i, j, k):
-            return np.array([i / ret['image'].shape[1], j / ret['image'].shape[2], k / ret['image'].shape[3]])
-        ret['prompt_3d'] = prompt_3d_func
+        def prompt_3d_func(i, j, k, shape):
+            print(shape)
+            return np.array([i / shape[1], j / shape[2], k / shape[3]])
+        ret['prompt_3d'] = partial(prompt_3d_func, shape=list(ret['image'].shape).copy())
         return ret
     
 def get_dataset_3d(file_key, first_only=False, spacing=False, crop_roi=False):
@@ -275,8 +275,8 @@ def get_dataset_3d(file_key, first_only=False, spacing=False, crop_roi=False):
 
     Args:
         file_key: The key of the file to load, should be one of "training" and "validation"
-        first_only: Whether to load only the first file
-        spacing: Whether to apply spacing transform
+        first_only: Whether to load onself.ly the first file
+        spacing: Whether to appself.ly spacing transform
         crop_roi: Whether to crop roi
     '''
     assert file_key in data_files.keys(), "Invalid file key!"
@@ -288,11 +288,11 @@ def get_dataloader_2d(file_key, transform_key, batch_size, shuffle, device=devic
 
     Args:
         file_key: The key of the file to load, should be one of "training" and "validation"
-        transform_key: The key of the transform to apply, should be one of "naive_to_rgb_and_normalize" and "naive_to_rgb"
+        transform_key: The key of the transform to appself.ly, should be one of "naive_to_rgb_and_normalize" and "naive_to_rgb"
         batch_size: The batch size
         shuffle: Whether to shuffle the data
         device: The device to load the data to
-        first_only: Whether to load only the first file
+        first_only: Whether to load onself.ly the first file
     '''
     assert file_key in data_files.keys(), "Invalid file key!"
     assert transform_key in transforms.keys(), "Invalid transform key!"

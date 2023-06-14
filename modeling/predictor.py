@@ -243,6 +243,13 @@ class SamWithLabelPredictor:
             dense_prompt_embeddings=dense_embeddings,
         )
 
+        # select the mask according to predicted label
+        argmax = torch.argmax(label_predictions, dim=1)
+        low_res_masks = low_res_masks[torch.arange(low_res_masks.shape[0]), argmax]
+        low_res_masks = low_res_masks[:,None,:,:]
+        iou_predictions = iou_predictions[torch.arange(iou_predictions.shape[0]), argmax]
+        iou_predictions = iou_predictions[:,None]
+
         # Upscale the masks to the original image resolution
         masks = self.model.postprocess_masks(low_res_masks, self.input_size, self.original_size)
 

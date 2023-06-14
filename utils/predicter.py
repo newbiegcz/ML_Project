@@ -59,6 +59,7 @@ class LabelPredicter():
         div = np.zeros(13,dtype=np.uint64)
         idx = 0
         for (image, ground_truth) in tqdm(zip(images, ground_truths), desc="slice"):
+            print('idx: {}'.format(idx))
             height = idx / len(images)
             labels = self.automatic_label_generator.generate_labels(image, height)
             res.append(labels)
@@ -67,6 +68,7 @@ class LabelPredicter():
                 ground_truth_mask = ground_truth == (i+1)
                 intersection[i] += 2 * np.sum(prediction_mask & ground_truth_mask)
                 div[i] += np.sum(prediction_mask) + np.sum(ground_truth_mask)
+            idx += 1
         dice = np.zeros(13, dtype=np.float64)
         for i in range(13):
             if div[i] != 0:
@@ -90,7 +92,7 @@ class LabelPredicter():
 
         print the mean dice
         """
-        
+        cache = get_dataset_3d(file_key, crop_roi=True)
 
         # predict
         dices = []
@@ -107,14 +109,14 @@ class LabelPredicter():
 
             print('reading data...')
             for i in range(h):
-                # print('{}/{}'.format(i,h))
+                #print('{}/{}'.format(i,h))
                 data = {
                     "image": images[:, :, i],
                     "label": labels[:, :, i],
                     "h": i / h
                 }
-                data = transform(data)
-                image = data['image'].numpy().transpose(1, 2, 0)
+                image = data['image'].numpy()[:,:,None]
+                image = np.concatenate([image, image, image], axis=2)
                 image = (image*255).astype(np.uint8)
                 label = data['label'][0].numpy()
                 images_list.append(image)
@@ -126,6 +128,8 @@ class LabelPredicter():
             labels = np.array(labels)
             ground_truths_list = np.array(ground_truths_list)
             dices.append(np.mean(dice))
+            print('dice: {}'.format(np.mean(dice)))
+            print(dice)
             #print(labels.shape)
             #print(dice.shape)
             #print(dice)
