@@ -244,12 +244,12 @@ class SAMWithLabelModule(pl.LightningModule):
         img_size = 1024
 
         mask_cls = batch['mask_cls']
-        lowres_labels = torch.nn.functional.interpolate(
-            batch['label'],
+        lowres_mask = torch.nn.functional.interpolate(
+            batch['connected_mask'],
             (img_size // 4, img_size // 4),
             mode="nearest-exact"
         )
-        binary_label = (lowres_labels[:, 0] == mask_cls[:, None, None]).to(torch.float)
+        binary_label = lowres_mask[:, 0].to(torch.float)
         
         is_foreground_label = mask_cls != 0
         batch_mask = batch_masks[torch.arange(B), mask_cls]

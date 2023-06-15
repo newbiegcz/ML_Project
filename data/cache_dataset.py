@@ -1,5 +1,8 @@
 from collections import namedtuple
 from torch.utils.data import Dataset
+import cv2
+import torch
+import numpy as np
 
 class DiskCacheDataset(Dataset):
 
@@ -7,7 +10,8 @@ class DiskCacheDataset(Dataset):
                     datapoint_cache,
                     embedding_cache,
                     key: str,
-                    model_type='vit_h'
+                    model_type='vit_h',
+                    calculate_connected_mask=False,
                  ):   
         
         super().__init__()
@@ -23,6 +27,7 @@ class DiskCacheDataset(Dataset):
 
         self.num_image = self.embedding_cache["num_image_for_" + self.key]
         self.num_datapoints = self.datapoint_cache["num_datapoints_for_" + self.key]
+        self.calculate_connected_mask = True
 
     def __len__(self):
         return self.num_datapoints
@@ -35,4 +40,14 @@ class DiskCacheDataset(Dataset):
         res["mask_cls"] = self.datapoint_cache[(self.key, idx)].mask_cls
         res["prompt"] = [self.datapoint_cache[(self.key, idx)].prompt_point[0], self.datapoint_cache[(self.key, idx)].prompt_point[1]]
         res["3d"] = [self.datapoint_cache[(self.key, idx)].prompt_point[2], self.datapoint_cache[(self.key, idx)].prompt_point[3], self.embedding_cache[(self.key, im_id)]["h"]]
+        if self.calculate_connected_mask:
+            mask = res["label"] == res["mask_cls"]
+            assert mask.dim() == 3
+            mask = mask[0].numpy().astype(np.uint8)
+            col = cv2.connectedComponents(mask)[1]
+            mask = torch.from_numpy(col == col[res["prompt"][1], res["prompt"][0]])
+            assert(res["label"][res["prompt"][1]][res["prompt"][0]] == res["mask_cls"])
+            res["connected_mask"] = mask.unsqueeze(0)
+
         return res
+    
