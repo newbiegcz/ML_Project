@@ -46,10 +46,10 @@ class Prompt3DEncoder(PromptEncoder):
             return 1
         
     def _embed_prompt_3ds(self, prompt_3ds: torch.Tensor) -> torch.Tensor:
-        coords = 2 * coords - 1
-        coords = coords @ self.positional_encoding_gaussian_matrix_3d
-        coords = 2 * np.pi * coords
-        positional_embeddings = torch.cat([torch.sin(coords), torch.cos(coords)], dim=-1)
+        prompt_3ds = 2 * prompt_3ds - 1
+        prompt_3ds = prompt_3ds @ self.positional_encoding_gaussian_matrix_3d
+        prompt_3ds = 2 * torch.pi * prompt_3ds
+        positional_embeddings = torch.cat([torch.sin(prompt_3ds), torch.cos(prompt_3ds)], dim=-1)
 
         return (positional_embeddings + self.embedding_3d.weight)[:, None, :]
     

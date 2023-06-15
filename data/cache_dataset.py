@@ -45,8 +45,8 @@ class DiskCacheDataset(Dataset):
             assert mask.dim() == 3
             mask = mask[0].numpy().astype(np.uint8)
             col = cv2.connectedComponents(mask)[1]
-            mask = torch.from_numpy(col == col[res["prompt"][1], res["prompt"][0]])
-            assert(res["label"][res["prompt"][1]][res["prompt"][0]] == res["mask_cls"])
+            mask = torch.from_numpy(col == col[int(res["prompt"][1])][int(res["prompt"][0])])
+            assert(res["label"][0][int(res["prompt"][1])][int(res["prompt"][0])] == res["mask_cls"])
             res["connected_mask"] = mask.unsqueeze(0)
 
         return res
