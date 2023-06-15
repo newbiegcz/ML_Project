@@ -9,7 +9,7 @@ fit:
     accelerator: gpu
     strategy: auto
     devices: auto
-    max_epochs: 400
+    max_epochs: 800
     limit_train_batches: 0.01
     num_nodes: 1
     precision: 32-true
@@ -66,6 +66,7 @@ fit:
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5
+    calculate_connected_mask: True
     debug: False
   # data:
   #     embedding_file_path: "/root/autodl-tmp/embeddings"
