@@ -25,14 +25,18 @@ def mouse_callback(event, x, y, flags, param):
     if event == cv2.EVENT_LBUTTONDOWN:
         normalized_x = y / img.shape[1] # 注意反过来了这个非常严重的问题
         normalized_y = x / img.shape[0]
+        assert normalized_x >= 0 and normalized_x <= 1
+        assert normalized_y >= 0 and normalized_y <= 1
         masks, iou_predictions, label_predictions, low_res_masks = predictor.predict(
             np.array([[x, y]]), np.array([1]), 
             prompt_3d = np.array([normalized_x, normalized_y, normalized_z])
         )
         
         label = label_predictions.argmax()
-        seg = masks[label]
-        score = iou_predictions[label]
+        
+        # seg = masks[label]
+        seg = masks[0]
+        score = iou_predictions[0]
 
         mask = img.copy()
         # Update the mask with the segmentation result
