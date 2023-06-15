@@ -27,12 +27,14 @@ class MemoryDataModule(pl.LightningDataModule):
                 embedding_file_path=embedding_file_path,
                 datapoint_file_path=datapoint_file_path,
                 model_type=self.model_type,
+                key="training",
             )
     
         _validation_dataset = DiskCacheDataset(
             embedding_file_path=embedding_file_path,
             datapoint_file_path=datapoint_file_path,
             model_type=self.model_type,
+            key="validation",
         )
 
         self.train_image_cache = {}
