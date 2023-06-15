@@ -137,6 +137,7 @@ class LabelPredicter():
             # save labels and dice to file
             if not os.path.exists('result'):
                 os.mkdir('result')
+            np.save(f'result/{file_name_without_extension}_imgs.npy', images_list)
             np.save(f'result/{file_name_without_extension}_pd_labels.npy', labels)
             np.save(f'result/{file_name_without_extension}_gt_labels.npy', ground_truths_list)
             np.save(f'result/{file_name_without_extension}_dice.npy', dice)

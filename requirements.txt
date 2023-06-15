@@ -11,3 +11,4 @@ monai[nibabel]==1.1.0
 rich==13.3.5
 xxhash==3.2.0
 imgui[glfw]
+result.zip
