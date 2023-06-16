@@ -7,7 +7,7 @@ import numpy as np
 class Prompter(torch.nn.Module):
 	def forward(self, mask, num = 1):
 		'''mask 是当前器官的一个 mask
-			 0 表示该像素不在当前器官内，1 表示在器官内
+			 0 表示该像素不在当前器官内,1 表示在器官内
 			 返回一个可以直接给 sam.predict 的 dict
 			   表示选择的 prompt'''
 		result = dict()
@@ -15,7 +15,6 @@ class Prompter(torch.nn.Module):
 		if num == 1:
 			dst = cv.distanceTransform(mask, cv.DIST_L2, 3)
 			ind = np.unravel_index(np.argmax(dst, axis = None), dst.shape)
-			print(ind[0], ind[1])
 			result["point_coords"] = np.array([ind])
 			result["point_labels"] = np.array([1])
 		else:
