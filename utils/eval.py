@@ -36,5 +36,6 @@ def evaluate(predicter, data):
                 nn += 1
         
         dice_val += (cur_dice / float(nn))
+        print(cur_dice / float(nn))
             
     return dice_val / float(c)
