@@ -38,8 +38,8 @@ def evaluate(predicter, data, max_point, require_box):
             dice_val += (cur_dice / nn)
             print(cur_dice / nn)
         
-        print(dice_val)
-        res_p.append(dice_val)
+        print(dice_val / num_people)
+        res_p.append(dice_val / num_people)
     
     if require_box:
         dice_val = 0.00
@@ -73,7 +73,7 @@ def evaluate(predicter, data, max_point, require_box):
             dice_val += (cur_dice / nn)
             print(cur_dice / nn)
         
-        print(dice_val)
-        res_b = dice_val
+        print(dice_val / num_people)
+        res_b = dice_val / num_people
             
     return res_p, res_b
