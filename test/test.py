@@ -37,7 +37,6 @@ new_transform = (
         albumentations.Compose([
             albumentations.Lambda(image=lambda x, **kwargs : x.reshape(x.shape + (1,)).repeat(3, axis=2), 
                                     mask=lambda x, **kwargs : x.reshape(x.shape + (1,)).repeat(3, axis=2)),
-            albumentations.ColorJitter(hue_shift_limit=0.2, sat_shift_limit=0.2, val_shift_limit=0.2, p=0.5),
             albumentations.Compose([
                 albumentations.Resize(height=512, width=512, p=1),
                 albumentations.CropNonEmptyMaskIfExists(256, 256, p=1),
@@ -60,11 +59,12 @@ new_val_transform = (
     ])
 )
 
-# input = torch.rand(234, 452)
-# transformed_img = transform_2d_withaugmentation({"image":input, "label":input}, seed=10)["image"]
-# transformed_img2 = new_transform(image=input.numpy(), mask=input.numpy(), seed=10)["image"]
-# dif = torch.from_numpy(transformed_img2).permute(2, 0, 1) - transformed_img
-# print(dif.min(), dif.max())
-# print(transformed_img.max(), transformed_img.min())
+input = torch.rand(234, 452)
+transformed_img = transform_2d_withaugmentation({"image":input, "label":input}, seed=10)["image"]
+transformed_img2 = new_transform(image=input.numpy(), mask=input.numpy(), seed=10)["image"]
+dif = torch.from_numpy(transformed_img2).permute(2, 0, 1) - transformed_img
+print(dif.min(), dif.max())
+print(transformed_img.max(), transformed_img.min())
+print(transformed_img.mean(), transformed_img.std())
 
 # print(new_transform(image=input.numpy(), mask=input.numpy(), seed=10).keys())

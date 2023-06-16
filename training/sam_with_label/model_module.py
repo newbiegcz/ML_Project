@@ -11,6 +11,7 @@ from utils.visualize import default_label_names
 from typing import List
 # import utils.visualize as visualize
 from modeling.build_sam import pretrained_checkpoints
+from third_party.warmup_scheduler.scheduler import GradualWarmupScheduler
 
 class DiceMetric():
     def __init__(self):
@@ -372,4 +373,8 @@ class SAMWithLabelModule(pl.LightningModule):
 
         if self.optimizer_type == "AdamW":   
             optimizer = optim.AdamW(self.parameters(), **self.optimizer_kwargs)
-        return optimizer
+        
+        _scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[6, 15, 30], gamma=0.1)
+        scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=2, after_scheduler=_scheduler)
+
+        return [optimizer], [scheduler]
