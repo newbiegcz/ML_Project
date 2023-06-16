@@ -10,7 +10,8 @@ fit:
     strategy: auto
     devices: auto
     max_epochs: 800
-    limit_train_batches: 0.04
+    limit_train_batches: 0.02
+    limit_val_batches: 0.5
     num_nodes: 1
     callbacks:
       - class_path: lightning.pytorch.callbacks.model_checkpoint.ModelCheckpoint
@@ -38,7 +39,7 @@ fit:
     model_type: vit_h
     train_image_encoder: false
     train_prompt_encoder: true
-    dice_loss_coef: 0.04
+    dice_loss_coef: 0.05
     focal_loss_coef: 1
     label_loss_coef: 0.1 # to check
     iou_loss_coef: 1.0
