@@ -58,7 +58,7 @@ fit:
     embedding_file_path: "/root/autodl-tmp/embeddings"
     datapoint_file_path: "/root/autodl-tmp/datapoints"
     model_type: "vit_h"
-    batch_size: 64
+    batch_size: 16
     num_workers: 5    # 在服务器应当调整
     debug: False
   # data:

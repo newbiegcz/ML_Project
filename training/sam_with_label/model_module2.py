@@ -82,7 +82,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
 
         # retrieve pretrained model
         self.pretrained_checkpoint = pretrained_checkpoints[model_type]
-        self.model = sam_with_gradients_model_registry[model_type](self.pretrained_checkpoint)
+        self.model, self.encoder_builder = sam_with_gradients_model_registry[model_type](None, train_image_encoder)
 
         # init losses
         self.segmentation_loss = SegmentationLoss(
@@ -123,7 +123,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
                                     masks=None,
                                 )
             
-        batch_masks, batch_ious, batch_label = self.model.mask_decoder(
+        batch_masks, batch_ious = self.model.mask_decoder(
             image_embeddings=embeddings,
             image_pe=self.model.prompt_encoder.get_dense_pe(),
             sparse_prompt_embeddings=sparse_embeddings,
@@ -135,7 +135,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         batch_mask = batch_masks[:, 0]
         batch_iou = batch_ious[:, 0]
 
-        return batch_mask, batch_iou, batch_label
+        return batch_mask, batch_iou
 
     def get_loss_and_update_metric(self, batch, batch_mask, batch_iou, metric):
         B = len(batch['embedding'])
@@ -172,6 +172,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         # calculate binary_label
         img_size = 1024
+        B = len(batch['embedding'])
         mask_cls = batch['mask_cls']
         lowres_labels = torch.nn.functional.interpolate(
             batch['label'],
@@ -192,7 +193,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         loss_sum = None
         for i in range(ITERATE_OVER):
             # run SAM on batch
-            batch_mask, batch_iou, batch_label = self.get_logits(batch, point_coords, point_labels)
+            batch_mask, batch_iou = self.get_logits(batch, point_coords, point_labels)
             # calculate predicted binary mask
             pred_binary_mask = (batch_mask > self.model.mask_threshold).to(torch.long)
 
@@ -213,9 +214,12 @@ class SAMWithInteractiveTraining(pl.LightningModule):
                 # randomly select an index
                 random_index = torch.randint(0, nonzero_indices.shape[0], (1,))[0]
                 random_position = nonzero_indices[random_index]
-                random_position = random_position.unsqueeze(0)
-                batch_nonzero_indices[i] = random_position
+                # print(random_position.shape)
                 x, y = random_position
+                # random_position = random_position.unsqueeze(0)
+                # print(random_position.shape)
+                batch_nonzero_indices[i] = random_position
+                # unpack Tensor random_position
                 # don't forget to mark foreground/background!
                 batch_point_label[i] = binary_label[i][x][y]
 
@@ -228,7 +232,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
             # point_labels is a Tensor of dimension B*N, where N is the number of points
             # batch_point_label if a Tensot of dimension B
             # concatenate point_labels with point_coords to form a Tensor of dimension B*(N+1)
-            point_labels = torch.cat((point_labels, batch_point_label[:, None]), dim=1)
+            point_labels = torch.cat((point_labels, batch_point_label), dim=1)
 
             # batch?
         
@@ -255,14 +259,21 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         self.training_dice_metric.reset()
 
     def validation_step(self, batch, batch_idx):
-        batch_mask, batch_iou, batch_label = self.get_logits(batch)
+        B = len(batch['embedding'])
+        batch = batch.copy()
+        batch['prompt'] = torch.cat((batch['prompt'][0].reshape(-1, 1), batch['prompt'][1].reshape(-1, 1)), dim=1)
+        point_coords = batch['prompt'][:, None, :]
 
-        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, self.validation_dice_metric)
+        # mark these points as foreground points
+        point_labels = torch.ones((B, 1), dtype=torch.int, device=self.device)
 
-        loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
+        batch_mask, batch_iou = self.get_logits(batch, point_coords, point_labels)
+
+        segmentation_loss, iou_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, self.validation_dice_metric)
+
+        loss = self.iou_loss_coef * iou_loss + segmentation_loss
 
         self.log("val_loss/total_loss", loss)
-        self.log("val_loss/label_loss", label_loss)
         self.log("val_loss/iou_loss", iou_loss)
         self.log("val_loss/segmentation_loss", segmentation_loss)
         self.log("val_loss/dice_loss", _dice_loss)
@@ -278,11 +289,13 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         assert self.optimizer_type in ["AdamW"], "Unimplemented"
 
         if self.optimizer_type == "AdamW":   
-            print(self.parameters(), self.optimizer_kwargs)
-            optimizer = optim.AdamW(self.parameters(), **self.optimizer_kwargs)
+            l = list(self.parameters())
+            # print(l, self.optimizer_kwargs)
+            optimizer = optim.AdamW(l, **self.optimizer_kwargs)
         return optimizer
 
 if __name__ == "__main__":
     # create model
     model = SAMWithInteractiveTraining()
     # print("model:", model)
+    # print("model:", model.model)

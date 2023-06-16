@@ -75,6 +75,7 @@ class MaskDecoder(nn.Module):
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
         multimask_output: bool,
+        already_unfolded = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict masks given image and prompt embeddings.
@@ -96,6 +97,7 @@ class MaskDecoder(nn.Module):
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
             dense_prompt_embeddings=dense_prompt_embeddings,
+            already_unfolded=already_unfolded
         )
 
         # Select the correct mask or masks for output
@@ -115,17 +117,27 @@ class MaskDecoder(nn.Module):
         image_pe: torch.Tensor,
         sparse_prompt_embeddings: torch.Tensor,
         dense_prompt_embeddings: torch.Tensor,
+        already_unfolded = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
+        # print(image_embeddings.shape, image_pe.shape, sparse_prompt_embeddings.shape, dense_prompt_embeddings.shape)
         output_tokens = torch.cat([self.iou_token.weight, self.mask_tokens.weight], dim=0)
+        # print(output_tokens.shape)
         output_tokens = output_tokens.unsqueeze(0).expand(sparse_prompt_embeddings.size(0), -1, -1)
+        # print(output_tokens.shape)
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
+        # print(tokens.shape)
 
-        # Expand per-image data in batch direction to be per-mask
-        src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
-        src = src + dense_prompt_embeddings
-        pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
+        if not already_unfolded:
+            # Expand per-image data in batch direction to be per-mask
+            src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
+            src = src + dense_prompt_embeddings
+            pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
+        else :
+            src = image_embeddings
+            src = src + dense_prompt_embeddings
+            pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0) # TODO: 可优化吗?
         b, c, h, w = src.shape
 
         # Run the transformer

@@ -11,7 +11,7 @@ class MemoryDataModule(pl.LightningDataModule):
                  embedding_file_path: str,
                  datapoint_file_path: str,
                  model_type: str = "vit_h",
-                 batch_size: int = 128,
+                 batch_size: int = 1,
                  aug_per_img: int = 10,
                  total_aug_per_img: int = 10,
                  debug: bool = False
