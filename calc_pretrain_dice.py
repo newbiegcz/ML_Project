@@ -6,14 +6,14 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from data.dataset import get_dataset_3d
-from segment_anything import SamPredictor, sam_model_registry
+from third_party.segment_anything import SamPredictor, sam_model_registry
 
 dataset_3d = get_dataset_3d('validation', crop_roi=True)
 
 model_type = "vit_h"
 model_checkpoint = "checkpoint/sam_vit_h_4b8939.pth"
 
-sam = sam_model_registry[model_type](checkpoint=model_checkpoint)
+sam = sam_model_registry[model_type](checkpoint=model_checkpoint).cuda()
 sam_predictor = SamPredictor(sam)
 
 Promptor = model.prompter.Prompter()
@@ -30,10 +30,7 @@ def show_box(box, ax):
     w, h = box[2] - box[0], box[3] - box[1]
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))    
 
-def predict(image, label):
-
-    print(image.shape)
-    print(label.shape)
+def predict(image, label, number_points, points = True, box = False):
 
     image = image.repeat(3, 1, 1)
 
@@ -43,8 +40,6 @@ def predict(image, label):
 
     #global image2
     #image2 = image
-
-    print(image.shape)
 
     sam_predictor.set_image(image)
         
@@ -57,7 +52,7 @@ def predict(image, label):
         mask[label == i] = 1
         if (np.max(mask) == 0):
             continue
-        prompt = Promptor(mask, sam_predictor, 1, True, False)
+        prompt = Promptor(mask, sam_predictor, number_points, points, box)
         #for j in range(mask.shape[0]):
         #    for k in range(mask.shape[1]):
         #        print(mask[j][k], end = ' ')
@@ -90,4 +85,11 @@ def predict(image, label):
 
     return result
 
-print(utils.eval.evaluate(predict, dataset_3d))
+
+n_c = 10
+res_p, res_b = utils.eval.evaluate(predict, dataset_3d, n_c, True)
+
+for i in range(n_c):
+    print("%d: %lf" %(i + 1, res_p[i]))
+    
+print("box: %lf" %(res_b))
