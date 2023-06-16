@@ -18,14 +18,14 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
         stride=stride,
         padding=dilation,
         groups=groups,
-        bias=True,
+        bias=False,
         dilation=dilation,
     )
 
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
     """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=True)
+    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 class Bottleneck(nn.Module):
     
@@ -61,15 +61,15 @@ class Bottleneck(nn.Module):
         identity = x
 
         out = self.conv1(x)
-        out = self.bn1(out)
+        out = self.bn1(out.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         out = self.relu(out)
 
         out = self.conv2(out)
-        out = self.bn2(out)
+        out = self.bn2(out.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         out = self.relu(out)
 
         out = self.conv3(out)
-        out = self.bn3(out)
+        out = self.bn3(out.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
 
         if self.downsample is not None:
             identity = self.downsample(x)
@@ -129,9 +129,7 @@ class MaskLabelDecoder(MaskDecoder):
         dense_prompt_embeddings: torch.Tensor,
         already_unfolded = False
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        image_embeddings = image_embeddings.permute(0, 3, 1, 2)
         image_embeddings = self.bottlenecks(image_embeddings)
-        image_embeddings = image_embeddings.permute(0, 2, 3, 1)
 
         masks, iou_pred, label_pred = self.predict_masks(
             image_embeddings=image_embeddings,
