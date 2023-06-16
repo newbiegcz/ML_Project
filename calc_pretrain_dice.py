@@ -42,6 +42,8 @@ def predict(image, label):
     #global image2
     #image2 = image
 
+    print(image.shape)
+
     sam_predictor.set_image(image)
         
     result = np.zeros(label.shape)

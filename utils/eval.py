@@ -1,4 +1,5 @@
 import numpy as np
+from tqdm import tqdm
 
 def evaluate(predicter, data):
 
@@ -7,11 +8,11 @@ def evaluate(predicter, data):
     print(c)
     for i in range(c):
         num = 0
-        x, y, z = data[i]["label"].shape
+        chn, x, y, z = data[i]["label"].shape
         pred = np.array([], dtype = np.int8)
         labels = np.array([], dtype = np.int8)
 
-        for j in range(z):
+        for j in tqdm(range(z)):
             val_inputs, val_labels = (data[i]["image"][:,:,:,j], data[i]["label"][0,:,:,j])
             val_outputs = predicter(val_inputs, val_labels)
             val_outputs = np.array(val_outputs, dtype = np.int8)

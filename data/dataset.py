@@ -27,7 +27,7 @@ from monai.transforms import (
 # TODO: 考虑 cache encoder 的结果
 
 device = "cpu"
-data_dir = "/root/autodl-tmp/raw_data/"
+data_dir = "raw_data/"
 split_json = "dataset_0.json"
 
 datasets = data_dir + split_json
