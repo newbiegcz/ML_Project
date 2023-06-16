@@ -1,20 +1,39 @@
-import torch
-from torchmetrics import Dice
+import numpy as np
 
 def evaluate(predicter, data):
 
     dice_val = 0.00
+    c = len(data)
+    print(c)
+    for i in range(c):
+        num = 0
+        x, y, z = data[i]["label"].shape
+        pred = np.array([], dtype = np.int8)
+        labels = np.array([], dtype = np.int8)
 
-    for batch in data_iter:
-        val_inputs, val_labels = (batch["image"], batch["label"])
-        _, _ , n, _, _ = val_inputs.shape
-        dice = Dice(ignore_index = 0)
-        for i in range(170, 171):
-            val_outputs = predicter(val_inputs[0,0,:,:,i], val_labels[0,0,:,:,i])
-            cur = dice(torch.tensor(val_outputs, dtype = torch.int), torch.tensor(val_labels[0,0,:,:,i], dtype = torch.int))
-            print("DICE: %.6lf" %cur)
-            dice_val += cur
-            num += 1
-        break
+        for j in range(z):
+            val_inputs, val_labels = (data[i]["image"][:,:,:,j], data[i]["label"][0,:,:,j])
+            val_outputs = predicter(val_inputs, val_labels)
+            val_outputs = np.array(val_outputs, dtype = np.int8)
+            val_labels = np.array(val_labels, dtype = np.int8)
+            pred = np.append(pred, val_outputs)
+            labels = np.append(labels, val_labels)
+
+        print(pred.shape)
+        print(labels.shape)    
+        nn = 0
+        cur_dice = 0.00
+        for i in range(1, 14):
+            a = np.zeros(pred.shape)
+            a[pred == i] = 1
+            b = np.zeros(labels.shape)
+            b[labels == i] = 1
+            c = np.zeros(pred.shape)
+            c[(pred == i) & (labels == i)] = 1
+            if (np.sum(a) + np.sum(b) != 0):
+                cur_dice += ((2.00 * np.sum(c)) / (np.sum(a) + np.sum(b)))
+                nn += 1
         
-    return dice_val / float(num)
+        dice_val += (cur_dice / float(nn))
+            
+    return dice_val / float(c)

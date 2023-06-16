@@ -32,6 +32,9 @@ def show_box(box, ax):
 
 def predict(image, label):
 
+    print(image.shape)
+    print(label.shape)
+
     image = image.permute(1, 2, 0).numpy()
     image *= 255
     image = np.array(image, dtype = np.uint8)
