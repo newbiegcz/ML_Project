@@ -374,7 +374,7 @@ class SAMWithLabelModule(pl.LightningModule):
         if self.optimizer_type == "AdamW":   
             optimizer = optim.AdamW(self.parameters(), **self.optimizer_kwargs)
         
-        _scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 30], gamma=0.1)
-        scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=4, after_scheduler=_scheduler)
+        _scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 30, 45], gamma=0.1)
+        scheduler = GradualWarmupScheduler(optimizer, multiplier=1, total_epoch=8, after_scheduler=_scheduler)
 
         return [optimizer], [scheduler]
