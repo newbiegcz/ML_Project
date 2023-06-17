@@ -9,76 +9,6 @@ from third_party.segment_anything.modeling.common import LayerNorm2d
 from third_party.segment_anything.modeling.mask_decoder import MaskDecoder
 from torch import Tensor
 
-def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
-    """3x3 convolution with padding"""
-    return nn.Conv2d(
-        in_planes,
-        out_planes,
-        kernel_size=3,
-        stride=stride,
-        padding=dilation,
-        groups=groups,
-        bias=False,
-        dilation=dilation,
-    )
-
-
-def conv1x1(in_planes: int, out_planes: int, stride: int = 1) -> nn.Conv2d:
-    """1x1 convolution"""
-    return nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
-
-class Bottleneck(nn.Module):
-    
-    expansion: int = 4
-
-    def __init__(
-        self,
-        inplanes: int,
-        planes: int,
-        stride: int = 1,
-        downsample: Optional[nn.Module] = None,
-        groups: int = 1,
-        base_width: int = 64,
-        dilation: int = 1,
-        norm_layer: Optional[Callable[..., nn.Module]] = None,
-    ) -> None:
-        super().__init__()
-        if norm_layer is None:
-            norm_layer = partial(torch.nn.LayerNorm, eps=1e-6)
-        width = int(planes * (base_width / 64.0)) * groups
-        # Both self.conv2 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv1x1(inplanes, width)
-        self.bn1 = norm_layer(width)
-        self.conv2 = conv3x3(width, width, stride, groups, dilation)
-        self.bn2 = norm_layer(width)
-        self.conv3 = conv1x1(width, planes * self.expansion)
-        self.bn3 = norm_layer(planes * self.expansion)
-        self.relu = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x: Tensor) -> Tensor:
-        identity = x
-
-        out = self.conv1(x)
-        out = self.bn1(out.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-        out = self.relu(out)
-
-        out = self.conv3(out)
-        out = self.bn3(out.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
-
-        if self.downsample is not None:
-            identity = self.downsample(x)
-
-        out += identity
-        out = self.relu(out)
-
-        return out
-
 class MaskLabelDecoder(MaskDecoder):
     def __init__(
         self,
@@ -104,13 +34,6 @@ class MaskLabelDecoder(MaskDecoder):
             self.transformer_dim, label_head_hidden_dim, 14, label_head_depth
         )
 
-        self.bottlenecks = nn.Sequential(
-            Bottleneck(self.transformer_dim, self.transformer_dim // 4),
-            Bottleneck(self.transformer_dim, self.transformer_dim // 4),
-            Bottleneck(self.transformer_dim, self.transformer_dim // 4),
-            Bottleneck(self.transformer_dim, self.transformer_dim // 4),
-        )
-
     def copy_weights(self):
         # shape 不匹配已经处理过了
         # 这里只需要复制多次重复了的 submodule
@@ -129,7 +52,6 @@ class MaskLabelDecoder(MaskDecoder):
         dense_prompt_embeddings: torch.Tensor,
         already_unfolded = False
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        image_embeddings = self.bottlenecks(image_embeddings)
 
         masks, iou_pred, label_pred = self.predict_masks(
             image_embeddings=image_embeddings,
