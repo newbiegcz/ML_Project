@@ -34,7 +34,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-      name: with_lowres_mask_prompt
+      name: with_lowres_mask_prompt (Old positional embedding)
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
