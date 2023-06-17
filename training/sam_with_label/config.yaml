@@ -46,7 +46,7 @@ fit:
     focal_loss_coef: 1
     label_loss_coef: 0.1 # to check
     iou_loss_coef: 1.0
-    label_weight: [40, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    label_weight: [20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     model_kwargs:
       iou_head_hidden_dim: 256
       label_head_hidden_dim: 256
