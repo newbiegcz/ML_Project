@@ -1,7 +1,7 @@
 import numpy as np
 from tqdm import tqdm
 
-def evaluate(predicter, data, max_point, require_box):
+def evaluate(predicter, data, max_point, require_box, consider_connecting):
 
     num_people = len(data)
     res_p = []
@@ -9,14 +9,13 @@ def evaluate(predicter, data, max_point, require_box):
     for n_c in range(1, max_point + 1):
         dice_val = 0.00
         for i in range(num_people):
-            num = 0
             chn, x, y, z = data[i]["label"].shape
             pred = np.array([], dtype = np.int8)
             labels = np.array([], dtype = np.int8)
 
             for j in tqdm(range(z)):
                 val_inputs, val_labels = (data[i]["image"][:,:,:,j], data[i]["label"][0,:,:,j])
-                val_outputs = predicter(val_inputs, val_labels, n_c, True, False)
+                val_outputs = predicter(val_inputs, val_labels, n_c, True, False, consider_connecting)
                 val_outputs = np.array(val_outputs, dtype = np.int8)
                 val_labels = np.array(val_labels, dtype = np.int8)
                 pred = np.append(pred, val_outputs)
@@ -44,14 +43,13 @@ def evaluate(predicter, data, max_point, require_box):
     if require_box:
         dice_val = 0.00
         for i in range(num_people):
-            num = 0
             chn, x, y, z = data[i]["label"].shape
             pred = np.array([], dtype = np.int8)
             labels = np.array([], dtype = np.int8)
 
             for j in tqdm(range(z)):
                 val_inputs, val_labels = (data[i]["image"][:,:,:,j], data[i]["label"][0,:,:,j])
-                val_outputs = predicter(val_inputs, val_labels, 1, False, True)
+                val_outputs = predicter(val_inputs, val_labels, 1, False, True, consider_connecting)
                 val_outputs = np.array(val_outputs, dtype = np.int8)
                 val_labels = np.array(val_labels, dtype = np.int8)
                 pred = np.append(pred, val_outputs)
