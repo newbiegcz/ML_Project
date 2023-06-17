@@ -323,6 +323,7 @@ class SAMWithLabelModule(pl.LightningModule):
         for i in range(14):
             self.log("train_Dice/%s" % default_label_names[i], avg_dice[i])
         
+        
         return loss
     
     def on_train_epoch_end(self):
