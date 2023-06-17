@@ -14,7 +14,7 @@ dataset_3d = get_dataset_3d('validation', crop_roi=True)
 model_type = "vit_h"
 model_checkpoint = "checkpoint/sam_vit_h_4b8939.pth"
 
-sam = sam_model_registry[model_type](checkpoint=model_checkpoint)
+sam = sam_model_registry[model_type](checkpoint=model_checkpoint).cuda()
 sam_predictor = SamPredictor(sam)
 
 Promptor = model.prompter.Prompter()
@@ -71,8 +71,6 @@ def predict(image, label, number_points, points = True, box = False, consider_co
             msk = msk.reshape(y, z)
 
             if (len(masks) > 1):
-                plt.ion()
-
                 plt.figure(figsize=(10,10))
                 plt.imshow(image)
                 show_points(prompt['point_coords'], prompt['point_labels'], plt.gca())
