@@ -157,7 +157,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
             focal_loss_params=focal_loss_params,
         )
         self.cross_entropy_loss = nn.CrossEntropyLoss().to(self.device)
-        self.training_dice_metrics = [DiceMetric() for i in range(ITERATE_OVER)]
+        self.training_dice_metrics = [DiceMetric() for i in range(ITERATE_OVER+1)]
         self.validation_dice_metric = DiceMetric()
     
     def get_logits(self,
@@ -381,7 +381,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
                 # batch?
             
                 # get loss
-                segmentation_loss, iou_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, self.training_dice_metrics[_])
+                segmentation_loss, iou_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, self.training_dice_metrics[_+1-prompt])
                 loss = self.iou_loss_coef * iou_loss + segmentation_loss
                 self.manual_backward(loss)
             
@@ -392,11 +392,11 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         self.log("train_loss/segmentation_loss", segmentation_loss)
         self.log("train_loss/dice_loss", _dice_loss)
         self.log("train_loss/focal_loss", _focal_loss)
-        for _ in range(ITERATE_OVER):
+        for _ in range(ITERATE_OVER+1):
             mdice, avg_dice = self.training_dice_metrics[_].get_metrics()
-            self.log(f"train_Dice/prompt{_+1-prompt}/mDice", mdice)
+            self.log(f"train_Dice/prompt{_}/mDice", mdice)
             for i in range(14):
-                self.log(f"train_Dice/prompt{_+1-prompt}/Dice{i}", avg_dice[i])
+                self.log(f"train_Dice/prompt{_}/Dice{i}", avg_dice[i])
             
 
         opt.step()
