@@ -303,10 +303,12 @@ class SAMWithLabelModule(pl.LightningModule):
         for prompt_type in self.prompt_types:
             if prompt_type == "single_point":
                 batch_masks, batch_ious, batch_label = self.get_logits(batch, step_type)
-                last_lowres_masks = batch_masks.clone()
+                mask_cls = batch['mask_cls']
+                batch_mask = batch_masks[torch.arange(mask_cls.shape[0]), mask_cls]
+                last_lowres_masks = batch_mask.clone()
             elif prompt_type == "with_dense_prompt":
                 assert not last_lowres_masks is None
-                batch_masks, batch_ious, batch_label = self.get_logits(batch, step_type, dense_prompts=last_lowres_masks)
+                batch_masks, batch_ious, batch_label = self.get_logits(batch, step_type, dense_prompts=last_lowres_masks[:, None, :, :])
             else :
                 assert False
 
@@ -327,7 +329,8 @@ class SAMWithLabelModule(pl.LightningModule):
                 for i in range(14):
                     self.log("%s/%s/Dices/%s" % (step_type, prompt_type, default_label_names[i]), avg_dice[i])
             
-        opt.step()
+        if step_type == "training":
+            opt.step()
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -354,7 +357,7 @@ class SAMWithLabelModule(pl.LightningModule):
     
     def on_validation_epoch_end(self):
         for prompt_type in self.prompt_types:
-            mdice, avg_dice = self.dice_metrics["validation"].get_metrics()
+            mdice, avg_dice = self.dice_metrics["validation"][prompt_type].get_metrics()
             self.log("validation/%s/mDice" % prompt_type, mdice)
             for i in range(14):
                 self.log("validation/%s/Dices/%s" % (prompt_type, default_label_names[i]), avg_dice[i])
