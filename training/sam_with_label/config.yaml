@@ -34,7 +34,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-      name: with_lowres_mask_prompt (Old positional embedding)
+      name: new_dataset_no_crop (Old positional embedding)
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -64,8 +64,8 @@ fit:
       gamma: 2
     debug: false
   data:
-    embedding_file_path: "/root/autodl-tmp/data_with_roi/embeddings"
-    datapoint_file_path: "/root/autodl-tmp/data_with_roi/datapoints"
+    embedding_file_path: "/root/autodl-tmp/data_without_crop/embeddings"
+    datapoint_file_path: "/root/autodl-tmp/data_without_crop/datapoints"
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5
