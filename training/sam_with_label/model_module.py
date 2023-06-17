@@ -306,7 +306,7 @@ class SAMWithLabelModule(pl.LightningModule):
                 batch_masks, batch_ious, batch_label = self.get_logits(batch, step_type)
                 mask_cls = batch['mask_cls']
                 batch_mask = batch_masks[torch.arange(mask_cls.shape[0]), mask_cls]
-                last_lowres_masks = batch_mask.clone()
+                last_lowres_masks = batch_mask.detach().clone()
             elif prompt_type == "with_dense_prompt":
                 assert not last_lowres_masks is None
                 batch_masks, batch_ious, batch_label = self.get_logits(batch, step_type, dense_prompts=last_lowres_masks[:, None, :, :])
