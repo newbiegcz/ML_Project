@@ -4,11 +4,11 @@ from utils.load_extracted_checkpoint import load_extracted_checkpoint
 from modeling.predictor import SamWithLabelPredictor
 import albumentations
 
-model = load_extracted_checkpoint("extracted.pth").cuda()
+model = load_extracted_checkpoint("checkpoint/extracted.pth").cuda()
 predictor = SamWithLabelPredictor(model)
 
 # Load an image
-image_id = 76
+image_id = 49
 img = cv2.imread("test/test_trained_sam/local_files/image%d.jpg" % image_id)
 with open("test/test_trained_sam/local_files/height%d.txt" % image_id, "r") as f:
     normalized_z = float(f.read())

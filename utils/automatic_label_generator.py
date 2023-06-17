@@ -38,9 +38,10 @@ class SamAutomaticLabelGenerator():
         model: SamWithLabel,
         points_per_side: Optional[int] = 32,
         points_per_batch: int = 64,
-        pred_iou_thresh: float = 0.80,
-        label_certainty_thresh: float = 0.0,
-        #stability_score_thresh: float = 0.95,
+        # pred_iou_thresh: float = torch.tensor([0,0.8,0.8,0.8,0.8,0.4,0.8,0.7,0.8,0.8,0.5,0.6,0.6,0.4]),
+        pred_iou_thresh: float = torch.tensor([0.4]*14),
+        label_certainty_thresh: float = 0,
+        #stability_score_thresh: float = 0.50,
         stability_score_thresh: float = 0.0,
         stability_score_offset: float = 1.0,
         box_nms_thresh: float = 0.7,
@@ -126,7 +127,7 @@ class SamAutomaticLabelGenerator():
 
         self.predictor = SamWithLabelPredictor(model)
         self.points_per_batch = points_per_batch
-        self.pred_iou_thresh = pred_iou_thresh
+        self.pred_iou_thresh = torch.tensor(pred_iou_thresh, device=self.predictor.device)
         self.label_certainty_thresh = label_certainty_thresh
         self.stability_score_thresh = stability_score_thresh
         self.stability_score_offset = stability_score_offset
@@ -145,8 +146,7 @@ class SamAutomaticLabelGenerator():
 
         Arguments:
           image (np.ndarray): The image to generate masks for, in HWC uint8 format,
-          required to be already transformed to the model's input size.
-          height: the height of the image slice in the whole CT data, normalized to [0,1].
+          not required to be already transformed to the model's input size.
 
         Returns:
           np.ndarray : The label of each pixel, with shape (H, W).
@@ -155,12 +155,24 @@ class SamAutomaticLabelGenerator():
             print('generating labels...')
         masks = self.generate(image, height)
         labels = np.zeros(image.shape[:2], dtype=np.uint8)
-        for idx in range(len(masks)):
+        vis = [np.zeros(image.shape[:2], dtype=np.uint8)] * 14
+
+        idxs = list(range(len(masks)))
+        idxs.sort(key=lambda x : masks[x]["predicted_iou"], reverse=True)
+
+        #tmp = []
+        #vis = {}
+        for idx in idxs:
             mask = masks[idx]["segmentation"]
             label_pred = masks[idx]["label"]
             label = np.array(label_pred).argmax()
+            # grid_labels_mask = self.grid_labels == label
+            if np.sum(np.minimum(vis[label],mask)) > 0:
+                continue
+            vis[label] += mask
             labels[mask > 0] = label
-        return labels
+            #tmp.append((mask, label_pred))
+        return labels#, tmp
 
     @torch.no_grad()
     def generate(self, image: np.ndarray, height : float, verbose=False) -> List[Dict[str, Any]]:
@@ -240,6 +252,7 @@ class SamAutomaticLabelGenerator():
 
 
     def _generate_masks(self, image: np.ndarray, height: float, verbose=False) -> MaskData:
+        self.grid_labels = np.ones((image.shape[0], image.shape[1]), dtype=torch.int) * -1
         orig_size = image.shape[:2]
         crop_boxes, layer_idxs = generate_crop_boxes(
             orig_size, self.crop_n_layers, self.crop_overlap_ratio
@@ -348,6 +361,9 @@ class SamAutomaticLabelGenerator():
             return_logits=True,
         )
 
+        for i in range(masks.shape[0]):
+            self.grid_labels[in_points[i][0][0].numpy(), in_points[i][0][1].numpy()] = label_preds[i].argmax().numpy()
+
         # Serialize predictions and store in MaskData
         #print(masks.shape) #64x1xHxW
         #print(iou_preds.shape) #64x1
@@ -376,13 +392,16 @@ class SamAutomaticLabelGenerator():
             keep_mask = prob[torch.arange(len(label)), label] > self.label_certainty_thresh
             data.filter(keep_mask)
 
+        
+
         #print('Before filter by IoU:', len(data["masks"]))
         if verbose:
             print('IoU predictions:', data["iou_preds"])
 
         # Filter by predicted IoU
-        if self.pred_iou_thresh > 0.0:
-            keep_mask = data["iou_preds"] > self.pred_iou_thresh
+        if True: #self.pred_iou_thresh > 0.0:
+            label = data["label_preds"].argmax(dim=1)
+            keep_mask = data["iou_preds"] > self.pred_iou_thresh[label]
             data.filter(keep_mask)
 
         if verbose:

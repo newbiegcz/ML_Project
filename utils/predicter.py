@@ -57,6 +57,7 @@ class LabelPredicter():
         res = []
         intersection = np.zeros(13,dtype=np.uint64)
         div = np.zeros(13,dtype=np.uint64)
+        #occur = np.zeros(13,dtype=np.uint64)
         idx = 0
         for (image, ground_truth) in tqdm(zip(images, ground_truths), desc="slice"):
             print('idx: {}'.format(idx))
@@ -68,9 +69,13 @@ class LabelPredicter():
                 ground_truth_mask = ground_truth == (i+1)
                 intersection[i] += 2 * np.sum(prediction_mask & ground_truth_mask)
                 div[i] += np.sum(prediction_mask) + np.sum(ground_truth_mask)
+                #occur[i] += np.sum(ground_truth_mask)
             idx += 1
         dice = np.zeros(13, dtype=np.float64)
         for i in range(13):
+            #if occur[i] == 0:
+            #    print(i)
+            #    assert(0)
             if div[i] != 0:
                 dice[i] = intersection[i] / div[i]
         return res, dice
@@ -108,7 +113,7 @@ class LabelPredicter():
             ground_truths_list = []
 
             print('reading data...')
-            for i in range(h):
+            for i in [range(h)]:
                 #print('{}/{}'.format(i,h))
                 data = {
                     "image": images[:, :, i],
@@ -118,7 +123,9 @@ class LabelPredicter():
                 image = data['image'].numpy()[:,:,None]
                 image = np.concatenate([image, image, image], axis=2)
                 image = (image*255).astype(np.uint8)
-                label = data['label'][0].numpy()
+                label = data['label'].numpy()
+                #print('image.shape', image.shape)
+                #print('label.shape', label.shape)
                 images_list.append(image)
                 ground_truths_list.append(label)
 

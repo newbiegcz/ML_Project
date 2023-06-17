@@ -1,12 +1,13 @@
+from functools import partial
 import torch
 from torch import nn
 from torch.nn import functional as F
 
-from typing import List, Tuple, Type
+from typing import Callable, List, Optional, Tuple, Type
 
 from third_party.segment_anything.modeling.common import LayerNorm2d
 from third_party.segment_anything.modeling.mask_decoder import MaskDecoder
-
+from torch import Tensor
 
 class MaskLabelDecoder(MaskDecoder):
     def __init__(
@@ -51,6 +52,7 @@ class MaskLabelDecoder(MaskDecoder):
         dense_prompt_embeddings: torch.Tensor,
         already_unfolded = False
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
         masks, iou_pred, label_pred = self.predict_masks(
             image_embeddings=image_embeddings,
             image_pe=image_pe,
