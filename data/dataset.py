@@ -26,7 +26,7 @@ from monai.transforms import (
 # TODO: 考虑 cache encoder 的结果
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-data_dir = "/root/autodl-fs/raw_data/"
+data_dir = "/root/autodl-tmp/raw_data/"
 split_json = "dataset_0.json"
 
 datasets = data_dir + split_json
