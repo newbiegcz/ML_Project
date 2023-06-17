@@ -299,6 +299,7 @@ class SAMWithLabelModule(pl.LightningModule):
             opt.zero_grad()
 
         last_lowres_masks = None
+        sum_loss = 0.0
 
         for prompt_type in self.prompt_types:
             if prompt_type == "single_point":
@@ -316,6 +317,10 @@ class SAMWithLabelModule(pl.LightningModule):
 
             loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
 
+            sum_loss += loss.detach()
+            if step_type == "training":
+                self.manual_backward(loss)
+
             self.log("%s/%s/loss/total_loss" % (step_type, prompt_type), loss)
             self.log("%s/%s/loss/label_loss" % (step_type, prompt_type), label_loss)
             self.log("%s/%s/loss/iou_loss" % (step_type, prompt_type), iou_loss)
@@ -331,7 +336,7 @@ class SAMWithLabelModule(pl.LightningModule):
             
         if step_type == "training":
             opt.step()
-        return loss
+        return sum_loss
 
     def training_step(self, batch, batch_idx):
         loss = self.single_step(batch, batch_idx, "training")
