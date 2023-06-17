@@ -160,18 +160,71 @@ class SamAutomaticLabelGenerator():
         idxs = list(range(len(masks)))
         idxs.sort(key=lambda x : masks[x]["predicted_iou"], reverse=True)
 
+        self.predictor.set_image(image)
         #tmp = []
         #vis = {}
         for idx in idxs:
             mask = masks[idx]["segmentation"]
             label_pred = masks[idx]["label"]
             label = np.array(label_pred).argmax()
-            # grid_labels_mask = self.grid_labels == label
-            if np.sum(np.minimum(vis[label],mask)) > 0:
+            
+            prompt_points = np.zeros((64,2),dtype=np.float32)
+            all_points = []
+            for i in range(1024):
+                for j in range(1024):
+                    if(mask[i][j] > 0):
+                        all_points.append([i,j])
+
+            for i in range(64):
+                pos = np.random.choice(len(all_points))
+                #print(pos)
+                prompt_points[i,0] = all_points[pos][1]
+                prompt_points[i,1] = all_points[pos][0]
+
+            #print(prompt_points)
+
+            in_points = torch.as_tensor(prompt_points, dtype=torch.float, device=self.predictor.device)
+            in_labels = torch.ones(in_points.shape[0], dtype=torch.int, device=in_points.device)
+            in_points = in_points[:, None, :] # Bx1x2
+            in_labels = in_labels[:, None] # Bx1
+            prompt_3ds = torch.cat((in_points[:, :, 1:2] / 1024, in_points[:, :, 0:1] / 1024
+                                    , torch.tensor([[[height]] * 1] * in_points.shape[0], device=self.predictor.device)), dim=2) # Bx1x3
+            prompt_3ds = prompt_3ds[:, 0, :].type(torch.float) # Bx3
+            #print(prompt_3ds)
+            _, _, label_preds, _ = self.predictor.predict_torch(
+                in_points,
+                in_labels,
+                prompt_3ds = prompt_3ds,
+                return_logits=True,
+            )
+
+            p=q=0
+            all = []
+            for i in range(64):
+                all.append(label_preds[i].argmax())
+                if label_preds[i].argmax() == label:
+                    p += 1
+                q += 1
+            print(label, p, q, all)
+            if p/q < 0.7:
                 continue
-            vis[label] += mask
+            
+            #collection_labels = self.grid_labels[mask > 0]
+            #print(collection_labels.shape)
+            #p = np.sum(collection_labels == label)
+            #q = np.sum(collection_labels >= 0)
+            #print(label, p, q)
+            #if p/q < 0.7:
+            #    continue
+            # grid_labels_mask = self.grid_labels == label
+            #if np.sum(np.minimum(vis[label],mask)) > 0:
+            #    continue
+            #vis[label] += mask
             labels[mask > 0] = label
             #tmp.append((mask, label_pred))
+
+        self.predictor.reset_image()
+
         return labels#, tmp
 
     @torch.no_grad()
@@ -252,7 +305,7 @@ class SamAutomaticLabelGenerator():
 
 
     def _generate_masks(self, image: np.ndarray, height: float, verbose=False) -> MaskData:
-        self.grid_labels = np.ones((image.shape[0], image.shape[1]), dtype=torch.int) * -1
+        self.grid_labels = np.ones((image.shape[0], image.shape[1]), dtype=np.int8) * -1
         orig_size = image.shape[:2]
         crop_boxes, layer_idxs = generate_crop_boxes(
             orig_size, self.crop_n_layers, self.crop_overlap_ratio
@@ -344,6 +397,7 @@ class SamAutomaticLabelGenerator():
         # Run model on this batch
         transformed_points = self.predictor.transform.apply_coords(points, im_size)
         in_points = torch.as_tensor(transformed_points, dtype=torch.float, device=self.predictor.device)
+        #print(in_points)
         in_labels = torch.ones(in_points.shape[0], dtype=torch.int, device=in_points.device)
         in_points = in_points[:, None, :] # Bx1x2
         in_labels = in_labels[:, None] # Bx1
@@ -362,7 +416,7 @@ class SamAutomaticLabelGenerator():
         )
 
         for i in range(masks.shape[0]):
-            self.grid_labels[in_points[i][0][0].numpy(), in_points[i][0][1].numpy()] = label_preds[i].argmax().numpy()
+            self.grid_labels[int(in_points[i][0][0].cpu().numpy()), int(in_points[i][0][1].cpu().numpy())] = label_preds[i].argmax().cpu().numpy()
 
         # Serialize predictions and store in MaskData
         #print(masks.shape) #64x1xHxW

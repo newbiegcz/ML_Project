@@ -8,7 +8,7 @@ model = load_extracted_checkpoint("checkpoint/extracted.pth").cuda()
 predictor = SamWithLabelPredictor(model)
 
 # Load an image
-image_id = 49
+image_id = 66
 img = cv2.imread("test/test_trained_sam/local_files/image%d.jpg" % image_id)
 with open("test/test_trained_sam/local_files/height%d.txt" % image_id, "r") as f:
     normalized_z = float(f.read())

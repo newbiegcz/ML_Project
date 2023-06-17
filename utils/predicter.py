@@ -64,13 +64,16 @@ class LabelPredicter():
             height = idx / len(images)
             labels = self.automatic_label_generator.generate_labels(image, height)
             res.append(labels)
+            tmp = np.zeros(14, dtype=np.float64)
             for i in range(13):
                 prediction_mask = labels == (i+1)
                 ground_truth_mask = ground_truth == (i+1)
                 intersection[i] += 2 * np.sum(prediction_mask & ground_truth_mask)
                 div[i] += np.sum(prediction_mask) + np.sum(ground_truth_mask)
+                tmp[i] = 2 * np.sum(prediction_mask & ground_truth_mask) / (np.sum(prediction_mask) + np.sum(ground_truth_mask))
                 #occur[i] += np.sum(ground_truth_mask)
             idx += 1
+            print('dice array:', tmp)
         dice = np.zeros(13, dtype=np.float64)
         for i in range(13):
             #if occur[i] == 0:
@@ -113,7 +116,7 @@ class LabelPredicter():
             ground_truths_list = []
 
             print('reading data...')
-            for i in [range(h)]:
+            for i in range(h):
                 #print('{}/{}'.format(i,h))
                 data = {
                     "image": images[:, :, i],
