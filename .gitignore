@@ -200,3 +200,5 @@ imgui.ini
 /extracted.pth
 /result/
 local_files/
+*.swp
+*.un~
