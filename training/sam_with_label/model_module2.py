@@ -17,6 +17,7 @@ from third_party.segment_anything.build_sam import sam_model_registry
 # - self.optimizers()
 
 ITERATE_OVER = 8 # NOTE 论文里是8
+bounding_box_coef = ITERATE_OVER # 因为 bounding_box 和点一起训练，所以需要一个参数调整它们相互的权值
 
 def iou_func(pred_binary_mask, binary_label):
     B = pred_binary_mask.shape[0]
@@ -383,6 +384,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
                 # get loss
                 segmentation_loss, iou_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, self.training_dice_metrics[_+1-prompt])
                 loss = self.iou_loss_coef * iou_loss + segmentation_loss
+                if prompt == 1: loss *= bounding_box_coef
                 self.manual_backward(loss)
             
 
