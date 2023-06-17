@@ -95,7 +95,7 @@ def ious_func(pred_binary_masks, binary_label):
         return intersection / union
 
 class SAMWithLabelModule(pl.LightningModule):
-    prompt_types = ["single_point", "with_dense_prompt"]
+    prompt_types = ["single_point"]# , "with_dense_prompt"]
     def __init__(self, 
                  model_type: str = "vit_h",
                  train_image_encoder: bool = False,
