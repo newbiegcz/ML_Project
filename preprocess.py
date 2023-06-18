@@ -45,8 +45,8 @@ from monai.transforms import (
 
 # parse arguments
 parser = argparse.ArgumentParser(description='Preprocess data')
-parser.add_argument('datapoints_disk_path', metavar='datapoints_disk_path', type=str, help='path to datapoints disk cache')
 parser.add_argument('embedding_disk_path', metavar='embedding_disk_path', type=str, help='path to embedding disk cache')
+parser.add_argument('datapoints_disk_path', metavar='datapoints_disk_path', type=str, help='path to datapoints disk cache')
 
 args = parser.parse_args()
 datapoints_disk_path = args.datapoints_disk_path
