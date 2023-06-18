@@ -1,9 +1,7 @@
 import torch
 import cv2 as cv
 import numpy as np
-# model/prompter.py
-# 生成 prompt
-# 可能是一个可训练的模块
+
 def bounding_box(mask):
 	c = np.nonzero(mask)
 	x1 = np.min(c[0])
@@ -39,6 +37,8 @@ class Prompter(torch.nn.Module):
 			for i in range(1, num):
 				result["point_coords"] = coords
 				result["point_labels"] = labels
+				if i > 1:
+					result["mask_input"] = logit
 				msk, score, logit = sam_predictor.predict(**result)
 				x, y, z = msk.shape
 				msk = msk.reshape(y, z)
@@ -53,6 +53,8 @@ class Prompter(torch.nn.Module):
 
 			result["point_coords"] = coords
 			result["point_labels"] = labels
+			if num > 1:
+				result["mask_input"] = logit
 		else:
 			assert(box == True)
 			x1, x2, y1, y2 = bounding_box(mask)

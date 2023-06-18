@@ -17,6 +17,11 @@ model_checkpoint = "checkpoint/sam_vit_h_4b8939.pth"
 model_type = "vit_h"
 
 sam = sam_model_registry[model_type](checkpoint=model_checkpoint).cuda()
+state_dict = sam.state_dict().copy()
+pth_state_dict = torch.load("checkpoint/extracted(4).pth")
+for k,v in pth_state_dict.items(): 
+    state_dict[k] = v
+sam.load_state_dict(state_dict)
 
 sam_predictor = SamPredictor(sam)
 
