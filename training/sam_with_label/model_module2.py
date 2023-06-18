@@ -442,9 +442,9 @@ class SAMWithInteractiveTraining(pl.LightningModule):
     def on_validation_epoch_end(self):
         for _ in range(ITERATE_OVER+1):
             mdice, avg_dice = self.validation_dice_metrics[_].get_metrics()
-            self.log(f"train_Dice/prompt{_}/mDice", mdice)
+            self.log(f"val_Dice/prompt{_}/mDice", mdice)
             for i in range(14):
-                self.log(f"train_Dice/prompt{_}/Dice{i}", avg_dice[i])
+                self.log(f"val_Dice/prompt{_}/Dice{i}", avg_dice[i])
         for _ in range(ITERATE_OVER+1):
             self.validation_dice_metrics[_].reset()
 
