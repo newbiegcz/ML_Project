@@ -18,6 +18,8 @@ from monai.data import (
     CacheDataset
 )
 
+from data.dataset import get_dataset_3d
+
 from data.dataset import DictTransform, PreprocessForModel
 import torchvision
 import os
@@ -55,21 +57,35 @@ class LabelPredicter():
         res = []
         intersection = np.zeros(13,dtype=np.uint64)
         div = np.zeros(13,dtype=np.uint64)
+        #occur = np.zeros(13,dtype=np.uint64)
+        idx = 0
         for (image, ground_truth) in tqdm(zip(images, ground_truths), desc="slice"):
-            labels = self.automatic_label_generator.generate_labels(image)
+            #print('idx: {}'.format(idx))
+            height = idx / len(images)
+            labels = self.automatic_label_generator.generate_labels(image, height)
             res.append(labels)
+            #tmp = np.zeros(14, dtype=np.float64)
+
             for i in range(13):
                 prediction_mask = labels == (i+1)
                 ground_truth_mask = ground_truth == (i+1)
                 intersection[i] += 2 * np.sum(prediction_mask & ground_truth_mask)
                 div[i] += np.sum(prediction_mask) + np.sum(ground_truth_mask)
+                #tmp[i] = 2 * np.sum(prediction_mask & ground_truth_mask) / (np.sum(prediction_mask) + np.sum(ground_truth_mask))
+                #occur[i] += np.sum(ground_truth_mask)
+            idx += 1
+            #print('dice array:', tmp)
         dice = np.zeros(13, dtype=np.float64)
         for i in range(13):
+            #if occur[i] == 0:
+            #    print(i)
+            #    assert(0)
+、
             if div[i] != 0:
                 dice[i] = intersection[i] / div[i]
         return res, dice
-    
-    def predict(self, file_key = 'validation', data_list_file_path = 'raw_data/dataset_0.json'):
+   
+    def predict(self, file_key = 'validation', data_list_file_path = 'raw_data/dataset_0.json', save_path = 'result'):
         """
         predict all CT data in training set or validation set.
 
@@ -86,33 +102,7 @@ class LabelPredicter():
 
         print the mean dice
         """
-        # get file names
-        files = load_decathlon_datalist(data_list_file_path, True, file_key)
-        
-        # get transform
-        transform = torchvision.transforms.Compose(
-            [DictTransform(["image", "label"], torchvision.transforms.Lambda(lambda x: x.unsqueeze(0).repeat(3, 1, 1))),
-            PreprocessForModel(normalize=False)]
-        )
-
-        # read files
-        set_track_meta(True)
-        _default_transform = Compose(
-            [
-                LoadImaged(keys=["image", "label"], ensure_channel_first=True, dtype=np.float64),
-                ScaleIntensityRanged(keys=["image"], a_min=-175, a_max=250, b_min=0.0, b_max=1.0, clip=True, dtype=np.float64),
-                CropForegroundd(keys=["image", "label"], source_key="image", dtype=np.float64),
-                Orientationd(keys=["image", "label"], axcodes="RAS"),
-                EnsureTyped(keys=["image", "label"], track_meta=False, dtype=np.float64),
-            ]
-        )
-        cache = CacheDataset(
-            data=files, 
-            transform=_default_transform, 
-            cache_rate=1.0, 
-            num_workers=4
-        )
-        set_track_meta(False)
+        cache = get_dataset_3d(file_key, crop_roi=True)
 
         # predict
         dices = []
@@ -129,35 +119,45 @@ class LabelPredicter():
 
             print('reading data...')
             for i in range(h):
-                # print('{}/{}'.format(i,h))
+                #print('{}/{}'.format(i,h))
                 data = {
                     "image": images[:, :, i],
                     "label": labels[:, :, i],
                     "h": i / h
                 }
-                data = transform(data)
-                image = data['image'].numpy().transpose(1, 2, 0)
+                image = data['image'].numpy()[:,:,None]
+                image = np.concatenate([image, image, image], axis=2)
                 image = (image*255).astype(np.uint8)
-                label = data['label'][0].numpy()
+                label = data['label'].numpy()
+                #print('image.shape', image.shape)
+                #print('label.shape', label.shape)
+
                 images_list.append(image)
                 ground_truths_list.append(label)
 
             # predict for single CT data
-            # print('predicting one...')
+            print('evaluating...')
+
             labels, dice = self.predict_one(images_list, ground_truths_list)
             labels = np.array(labels)
             ground_truths_list = np.array(ground_truths_list)
             dices.append(np.mean(dice))
+
+            print('dice: {}'.format(np.mean(dice)))
+            print(dice)
+
             #print(labels.shape)
             #print(dice.shape)
             #print(dice)
 
             # save labels and dice to file
-            if not os.path.exists('result'):
-                os.mkdir('result')
-            np.save(f'result/{file_name_without_extension}_pd_labels.npy', labels)
-            np.save(f'result/{file_name_without_extension}_gt_labels.npy', ground_truths_list)
-            np.save(f'result/{file_name_without_extension}_dice.npy', dice)
+            if not os.path.exists(save_path):
+                os.mkdir(save_path)
+            np.save(os.path.join(save_path, f'{file_name_without_extension}_imgs.npy'), images_list)
+            np.save(os.path.join(save_path, f'{file_name_without_extension}_pd_labels.npy'), labels)
+            np.save(os.path.join(save_path, f'{file_name_without_extension}_gt_labels.npy'), ground_truths_list)
+            np.save(os.path.join(save_path, f'{file_name_without_extension}_dice.npy'), dice)
+
         
         # output mdice
         mdice = np.mean(dices)
@@ -222,7 +222,9 @@ class LabelPredicter():
                 ground_truths_list.append(label)
 
             # predict for single CT data
-            # print('predicting one...')
+
+            print('evaluating...')
+
             labels, dice = self.predict_one(images_list, ground_truths_list)
             labels = np.array(labels)
             ground_truths_list = np.array(ground_truths_list)

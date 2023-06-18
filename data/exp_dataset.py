@@ -16,6 +16,16 @@ import rich
 
 size_10gb = 10 * 1024 * 1024 * 1024 # 10 GB
 
+def unsqueeze(x, **kwargs):
+    return x.reshape(x.shape + (1,))
+
+def gen_clache(**kwargs):
+    return albumentations.Compose([
+        albumentations.FromFloat(dtype="uint8"),
+        albumentations.CLAHE(**kwargs),
+        albumentations.ToFloat()
+    ])
+
 def get_image_key(image, model_type):
     # Warning: The image may have been normalized!!!
 
@@ -164,15 +174,6 @@ class Producer:
             # data augmentation
             # TODO: RandCmap 可能太过 aggressive 了
             # TODO: 可以考虑使用 RandColorJitter
-            def unsqueeze(x, **kwargs):
-                return x.reshape(x.shape + (1,))
-            
-            def gen_clache(**kwargs):
-                return albumentations.Compose([
-                    albumentations.FromFloat(dtype="uint8"),
-                    albumentations.CLAHE(**kwargs),
-                    albumentations.ToFloat()
-                ])
             # 在 RandCmap 前离散化可能不是明智的选择..
             self.transform_2d = (
                 wrap_with_torchseed(

@@ -162,7 +162,11 @@ new_val_transform = (
 )
 
 class Dataset2D(data.Dataset):
+<<<<<< predictor_debug
+    def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, spacing=False):
+======
     def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, compress=False):
+>> main
         if first_only:
             files = files.copy()[:1]
 
@@ -170,6 +174,7 @@ class Dataset2D(data.Dataset):
         self.device = device
         self.transform = transform
         set_track_meta(True)
+
         if compress:
             _default_transform = Compose(
                 [

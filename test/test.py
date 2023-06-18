@@ -37,6 +37,7 @@ new_transform = (
         albumentations.Compose([
             albumentations.Lambda(image=lambda x, **kwargs : x.reshape(x.shape + (1,)).repeat(3, axis=2), 
                                     mask=lambda x, **kwargs : x.reshape(x.shape + (1,)).repeat(3, axis=2)),
+
             albumentations.Compose([
                 albumentations.Resize(height=512, width=512, p=1),
                 albumentations.CropNonEmptyMaskIfExists(256, 256, p=1),

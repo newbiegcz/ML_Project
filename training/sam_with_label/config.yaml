@@ -69,7 +69,9 @@ fit:
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5
+
     calculate_connected_mask: True
+
     debug: False
   # data:
   #     embedding_file_path: "/root/autodl-tmp/embeddings"

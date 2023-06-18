@@ -1,4 +1,5 @@
 from utils.position_embedding_3d import PositionalEncoding3D
+
 from third_party.segment_anything.modeling.prompt_encoder import PromptEncoder
 from typing import Optional, Tuple, Type
 import torch
