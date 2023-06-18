@@ -4,6 +4,10 @@ import cv2
 import torch
 import numpy as np
 
+import cv2
+import torch
+import numpy as np
+
 class DiskCacheDataset(Dataset):
 
     def __init__(self, *,
@@ -27,6 +31,7 @@ class DiskCacheDataset(Dataset):
 
         self.num_image = self.embedding_cache["num_image_for_" + self.key]
         self.num_datapoints = self.datapoint_cache["num_datapoints_for_" + self.key]
+
         self.calculate_connected_mask = True
 
     def __len__(self):
@@ -40,6 +45,7 @@ class DiskCacheDataset(Dataset):
         res["mask_cls"] = self.datapoint_cache[(self.key, idx)].mask_cls
         res["prompt"] = [self.datapoint_cache[(self.key, idx)].prompt_point[0], self.datapoint_cache[(self.key, idx)].prompt_point[1]]
         res["3d"] = [self.datapoint_cache[(self.key, idx)].prompt_point[2], self.datapoint_cache[(self.key, idx)].prompt_point[3], self.embedding_cache[(self.key, im_id)]["h"]]
+        
         if self.calculate_connected_mask:
             mask = res["label"] == res["mask_cls"]
             assert mask.dim() == 3
@@ -48,6 +54,6 @@ class DiskCacheDataset(Dataset):
             mask = torch.from_numpy(col == col[int(res["prompt"][1])][int(res["prompt"][0])])
             assert(res["label"][0][int(res["prompt"][1])][int(res["prompt"][0])] == res["mask_cls"])
             res["connected_mask"] = mask.unsqueeze(0)
-        if not self.calculate_connected_mask: res.pop("label")
+
         return res
     
