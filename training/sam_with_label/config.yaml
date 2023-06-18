@@ -17,7 +17,11 @@ fit:
       - class_path: lightning.pytorch.callbacks.model_checkpoint.ModelCheckpoint
         init_args:
           save_top_k: 10
+to fix
+          monitor: val_Dice/prompt1/mDice
+
           monitor: validation/single_point/mDice
+
           mode: max
       - class_path: lightning.pytorch.callbacks.LearningRateMonitor
         init_args:
@@ -35,6 +39,7 @@ fit:
     default_root_dir: experiment_logs/lightning/
     wandb_config:
       name: with_lowres_mask_prompt (Old positional embedding)
+
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -44,13 +49,13 @@ fit:
     train_prompt_encoder: true
     dice_loss_coef: 0.05
     focal_loss_coef: 1
-    label_loss_coef: 0.1 # to check
+    # label_loss_coef: 0.1 # to check
     iou_loss_coef: 1.0
-    label_weight: [20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-    model_kwargs:
-      iou_head_hidden_dim: 256
-      label_head_hidden_dim: 256
-    prompt_3d_std: 0.2 # to check
+    # label_weight: [10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    # model_kwargs:
+    #   iou_head_hidden_dim: 256
+    #   label_head_hidden_dim: 256
+    # prompt_3d_std: 0.2 # to check
       
     optimizer_type: AdamW
     optimizer_kwargs:
@@ -62,14 +67,13 @@ fit:
     focal_loss_params:
       alpha: 0.25
       gamma: 2
-    debug: false
+    debug: False
   data:
     embedding_file_path: "/root/autodl-tmp/data_with_roi/embeddings"
     datapoint_file_path: "/root/autodl-tmp/data_with_roi/datapoints"
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5
-
     calculate_connected_mask: True
 
     debug: False

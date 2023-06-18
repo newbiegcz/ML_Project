@@ -201,4 +201,7 @@ local_files/
 /extracted.pth
 /result/
 local_files/
+
+*.swp
+*.un~
 result.zip
