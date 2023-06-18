@@ -437,16 +437,14 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         self.log("val_loss/segmentation_loss", segmentation_loss)
         self.log("val_loss/dice_loss", _dice_loss)
         self.log("val_loss/focal_loss", _focal_loss)
+        return loss
+
+    def on_validation_epoch_end(self):
         for _ in range(ITERATE_OVER+1):
             mdice, avg_dice = self.validation_dice_metrics[_].get_metrics()
             self.log(f"train_Dice/prompt{_}/mDice", mdice)
             for i in range(14):
                 self.log(f"train_Dice/prompt{_}/Dice{i}", avg_dice[i])
-        return loss
-
-    def on_validation_epoch_end(self):
-        mdice, avg_dice = self.validation_dice_metric.get_metrics()
-        self.log("val_Dice/mDice", mdice)
         for _ in range(ITERATE_OVER+1):
             self.validation_dice_metrics[_].reset()
 
