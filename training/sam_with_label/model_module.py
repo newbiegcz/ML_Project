@@ -386,4 +386,6 @@ class SAMWithLabelModule(pl.LightningModule):
         #scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 30, 45], gamma=0.1)
 
         #return [optimizer], [scheduler]
+
         return optimizer
+
