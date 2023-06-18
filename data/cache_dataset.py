@@ -48,6 +48,5 @@ class DiskCacheDataset(Dataset):
             mask = torch.from_numpy(col == col[int(res["prompt"][1])][int(res["prompt"][0])])
             assert(res["label"][0][int(res["prompt"][1])][int(res["prompt"][0])] == res["mask_cls"])
             res["connected_mask"] = mask.unsqueeze(0)
-        if not self.calculate_connected_mask: res.pop("label")
         return res
     

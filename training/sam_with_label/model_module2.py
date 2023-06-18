@@ -123,6 +123,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
 
         # save hyperparameters
         self.save_hyperparameters()
+
         self.model_type = model_type
         self.train_image_encoder = train_image_encoder
         self.train_prompt_encoder = train_prompt_encoder

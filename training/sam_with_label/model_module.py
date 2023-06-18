@@ -95,6 +95,7 @@ def ious_func(pred_binary_masks, binary_label):
         return intersection / union
 
 class SAMWithLabelModule(pl.LightningModule):
+    prompt_types = ["single_point", "with_dense_prompt"]
     def __init__(self, 
                  model_type: str = "vit_h",
                  train_image_encoder: bool = False,
@@ -136,6 +137,7 @@ class SAMWithLabelModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
+        self.automatic_optimization = False
         self.prompt_3d_std = prompt_3d_std
         self.pretrained_checkpoint = pretrained_checkpoints[model_type]
         self.model_type = model_type
@@ -179,15 +181,31 @@ class SAMWithLabelModule(pl.LightningModule):
         )
 
         self.cross_entropy_loss = nn.CrossEntropyLoss(reduction="none").to(self.device)
-        self.training_dice_metric = DiceMetric()
-        self.validation_dice_metric = DiceMetric()
-        self.training_label_metric = LabelMetric(self.label_weight)
-        self.validation_label_metric = LabelMetric(self.label_weight)
+        self.dice_metrics = {
+            "training" : {
+                "single_point": DiceMetric(),
+                "with_dense_prompt": DiceMetric(),
+            },
+            "validation": {
+                "single_point": DiceMetric(),
+                "with_dense_prompt": DiceMetric(),
+            },
+        }
+        self.label_metrics = {
+            "training" : {
+                "single_point": LabelMetric(self.label_weight),
+                "with_dense_prompt": LabelMetric(self.label_weight),
+            },
+            "validation": {
+                "single_point": LabelMetric(self.label_weight),
+                "with_dense_prompt": LabelMetric(self.label_weight),
+            },
+        }
 
         if self.debug:
             visualize.initialize_window()
 
-    def get_logits(self, batch, mode):
+    def get_logits(self, batch, mode, dense_prompts=None):
         # 未来如果实现训练 encoder，一定要记得判断 torch.is_grad_enabled()，避免 validate 时保留梯度
         assert not self.train_image_encoder, "Unimplemented"
         assert mode in ["training", "validation"]
@@ -220,7 +238,7 @@ class SAMWithLabelModule(pl.LightningModule):
             sparse_embeddings, dense_embeddings = self.model.prompt_encoder(
                                     points=(point_coords, point_labels),
                                     boxes=None,
-                                    masks=None,
+                                    masks=dense_prompts,
                                     prompt_3ds=prompt_3ds
                                 )
             
@@ -235,7 +253,7 @@ class SAMWithLabelModule(pl.LightningModule):
 
         return batch_masks, batch_ious, batch_label
     
-    def get_loss_and_update_metric(self, batch, batch_masks, batch_ious, batch_label, dice_metric, label_metric, batch_name):
+    def get_loss_and_update_metric(self, batch, batch_masks, batch_ious, batch_label, dice_metric, label_metric):
         B = len(batch['embedding'])
 
         segmentation_loss = 0.0
@@ -271,103 +289,93 @@ class SAMWithLabelModule(pl.LightningModule):
         label_loss = (self.cross_entropy_loss(batch_label, mask_cls.to(torch.long)) * self.label_weight[mask_cls]).mean()
         
         label_metric.update(batch_label.argmax(dim=1), mask_cls)
-        # if self.debug:
-        #     if batch_name is None:
-        #         batch_name = "unnamed"
-
-        #     pd_output_label = torch.nn.functional.interpolate(
-        #         pred_binary_mask[0:1, None, :, :].to(torch.float32),
-        #         (1024, 1024),
-        #         mode="nearest-exact"
-        #     )[0].cpu().numpy()
-
-        #     gt_output_label = torch.nn.functional.interpolate(
-        #         binary_label[0:1, None, :, :].to(torch.float32),
-        #         (1024, 1024),
-        #         mode="nearest-exact"
-        #     )[0].cpu().numpy()
-
-        #     prompt = batch['prompt'][0].detach().cpu().numpy()
-        #     visualize.add_object_2d(batch_name + "_img0",
-        #             image=batch['image'][0].detach().cpu().numpy(),
-        #             pd_label=pd_output_label,
-        #             gt_label=gt_output_label,
-        #             prompt_points=[(prompt, 1)],
-        #             label_name=["negative", "positive"],
-        #                 extras={
-        #                 "prompt": prompt,
-        #                 "prompt_label": default_label_names[mask_cls[0].cpu().to(torch.int)]
-        #             }
-        #     )
-        #     input("")
 
         return segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss
 
+    def single_step(self, batch, batch_idx, step_type):
+        assert step_type in ["training", "validation"]
+        if step_type == "training":
+            opt = self.optimizers()
+            opt.zero_grad()
+
+        last_lowres_masks = None
+        sum_loss = 0.0
+
+        for prompt_type in self.prompt_types:
+            if prompt_type == "single_point":
+                batch_masks, batch_ious, batch_label = self.get_logits(batch, step_type)
+                pd_mask_cls = batch_label.argmax(dim = 1)
+                batch_mask = batch_masks[torch.arange(pd_mask_cls.shape[0]), pd_mask_cls]
+                last_lowres_masks = batch_mask.detach().clone()
+            elif prompt_type == "with_dense_prompt":
+                assert not last_lowres_masks is None
+                batch_masks, batch_ious, batch_label = self.get_logits(batch, step_type, dense_prompts=last_lowres_masks[:, None, :, :])
+            else :
+                assert False
+
+            segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.dice_metrics[step_type][prompt_type], self.label_metrics[step_type][prompt_type])
+
+            loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
+
+            sum_loss += loss.detach()
+            if step_type == "training":
+                self.manual_backward(loss)
+
+            self.log("%s/%s/loss/total_loss" % (step_type, prompt_type), loss)
+            self.log("%s/%s/loss/label_loss" % (step_type, prompt_type), label_loss)
+            self.log("%s/%s/loss/iou_loss" % (step_type, prompt_type), iou_loss)
+            self.log("%s/%s/loss/segmentation_loss" % (step_type, prompt_type), segmentation_loss)
+            self.log("%s/%s/loss/dice_loss" % (step_type, prompt_type), _dice_loss)
+            self.log("%s/%s/loss/focal_loss" % (step_type, prompt_type), _focal_loss)
+
+            if step_type == "training":
+                mdice, avg_dice = self.dice_metrics[step_type][prompt_type].get_metrics()
+                self.log("%s/%s/mDice/" % (step_type, prompt_type), mdice)
+                for i in range(14):
+                    self.log("%s/%s/Dices/%s" % (step_type, prompt_type, default_label_names[i]), avg_dice[i])
+            
+        if step_type == "training":
+            opt.step()
+        return sum_loss
 
     def training_step(self, batch, batch_idx):
-        batch_masks, batch_ious, batch_label = self.get_logits(batch, "training")
-
-        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.training_dice_metric, self.training_label_metric, "train_%d" % batch_idx)
-
-        loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
-
-        self.log("train_loss/total_loss", loss)
-        self.log("train_loss/label_loss", label_loss)
-        self.log("train_loss/iou_loss", iou_loss)
-        self.log("train_loss/segmentation_loss", segmentation_loss)
-        self.log("train_loss/dice_loss", _dice_loss)
-        self.log("train_loss/focal_loss", _focal_loss)
-
-        mdice, avg_dice = self.training_dice_metric.get_metrics()
-        self.log("train_Dice/mDice", mdice)
-        for i in range(14):
-            self.log("train_Dice/%s" % default_label_names[i], avg_dice[i])
-        
-        
+        loss = self.single_step(batch, batch_idx, "training")
         return loss
     
     def on_train_epoch_end(self):
-        acc, weighted_acc, confusion_matric = self.training_label_metric.get_metrics()
-        self.logger.experiment.log(
-            {
-                "train_Label/acc": acc,
-                "train_Label/weighted_acc": weighted_acc,
-                "train_Label/confusion_matrix": confusion_matric
-            }
-        )
-        self.training_dice_metric.reset()
-        self.training_label_metric.reset()
+        for prompt_type in self.prompt_types:
+            acc, weighted_acc, confusion_matric = self.label_metrics["training"][prompt_type].get_metrics()
+            self.logger.experiment.log(
+                {
+                    "training/%s/Label/acc" % prompt_type: acc,
+                    "training/%s/Label/weighted_acc" % prompt_type: weighted_acc,
+                    "training/%s/Label/confusion_matrix" % prompt_type: confusion_matric
+                }
+            )
+            self.dice_metrics["training"][prompt_type].reset()
+            self.label_metrics["training"][prompt_type].reset()
+
     
     def validation_step(self, batch, batch_idx):
-        batch_masks, batch_ious, batch_label = self.get_logits(batch, "validation")
-
-        segmentation_loss, iou_loss, label_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_masks, batch_ious, batch_label, self.validation_dice_metric, self.validation_label_metric, "val_%d" % batch_idx)
-
-        loss = self.iou_loss_coef * iou_loss + self.label_loss_coef * label_loss + segmentation_loss
-
-        self.log("val_loss/total_loss", loss)
-        self.log("val_loss/label_loss", label_loss)
-        self.log("val_loss/iou_loss", iou_loss)
-        self.log("val_loss/segmentation_loss", segmentation_loss)
-        self.log("val_loss/dice_loss", _dice_loss)
-        self.log("val_loss/focal_loss", _focal_loss)
+        loss = self.single_step(batch, batch_idx, "validation")
         return loss
     
     def on_validation_epoch_end(self):
-        mdice, avg_dice = self.validation_dice_metric.get_metrics()
-        self.log("val_Dice/mDice", mdice)
-        for i in range(14):
-            self.log("val_Dice/%s" % default_label_names[i], avg_dice[i])
-        acc, weighted_acc, confusion_matric = self.validation_label_metric.get_metrics()
-        self.logger.experiment.log(
-            {
-                "val_Label/acc": acc,
-                "val_Label/weighted_acc": weighted_acc,
-                "val_Label/confusion_matrix": confusion_matric
-            }
-        )
-        self.validation_dice_metric.reset()
-        self.validation_label_metric.reset()
+        for prompt_type in self.prompt_types:
+            mdice, avg_dice = self.dice_metrics["validation"][prompt_type].get_metrics()
+            self.log("validation/%s/mDice" % prompt_type, mdice)
+            for i in range(14):
+                self.log("validation/%s/Dices/%s" % (prompt_type, default_label_names[i]), avg_dice[i])
+            acc, weighted_acc, confusion_matric = self.label_metrics["validation"][prompt_type].get_metrics()
+            self.logger.experiment.log(
+                {
+                    "validation/%s/Label/acc" % prompt_type: acc,
+                    "validation/%s/Label/weighted_acc" % prompt_type: weighted_acc,
+                    "validation/%s/Label/confusion_matrix" % prompt_type: confusion_matric
+                }
+            )
+            self.dice_metrics["validation"][prompt_type].reset()
+            self.label_metrics["validation"][prompt_type].reset()
 
     def configure_optimizers(self):
         assert self.optimizer_type in ["AdamW"], "Unimplemented"
@@ -375,6 +383,7 @@ class SAMWithLabelModule(pl.LightningModule):
         if self.optimizer_type == "AdamW":   
             optimizer = optim.AdamW(self.parameters(), **self.optimizer_kwargs)
         
-        scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 30, 45], gamma=0.1)
+        #scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[15, 30, 45], gamma=0.1)
 
-        return [optimizer], [scheduler]
+        #return [optimizer], [scheduler]
+        return optimizer

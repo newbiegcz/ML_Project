@@ -32,7 +32,11 @@ class MyTrainer(Trainer):
         super().__init__(logger=logger, **kwargs)
 
 def cli_main():
+<<<<<< 20230616
     cli = MyLightningCLI(SAMWithInteractiveTraining, DiskDataModule,
+======
+    cli = MyLightningCLI(SAMWithLabelModule, DiskDataModule,
+>>>>>> main
         trainer_class=MyTrainer,
         parser_kwargs={
             "default_config_files": ["training/sam_with_label/config.yaml"],   
