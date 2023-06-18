@@ -416,7 +416,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         return loss / ITERATE_OVER
 
     def on_train_epoch_end(self):
-        for i in range(ITERATE_OVER):
+        for i in range(ITERATE_OVER+1):
             self.training_dice_metrics[i].reset()
 
     def validation_step(self, batch, batch_idx):
@@ -447,7 +447,8 @@ class SAMWithInteractiveTraining(pl.LightningModule):
     def on_validation_epoch_end(self):
         mdice, avg_dice = self.validation_dice_metric.get_metrics()
         self.log("val_Dice/mDice", mdice)
-        self.validation_dice_metric.reset()
+        for _ in range(ITERATE_OVER+1):
+            self.validation_dice_metrics[_].reset()
 
     def configure_optimizers(self):
         assert self.optimizer_type in ["AdamW"], "Unimplemented"
