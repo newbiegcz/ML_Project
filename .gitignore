@@ -204,3 +204,4 @@ local_files/
 *.swp
 *.un~
 result.zip
+/experiment_logs/

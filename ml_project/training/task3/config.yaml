@@ -1,6 +1,3 @@
-# lightning.pytorch==2.0.2
-# TODO: change monitor to other metrics
-
 subcommand: fit
 fit:
   seed_everything: 42
@@ -18,7 +15,6 @@ fit:
         init_args:
           save_top_k: 10
           monitor: validation/single_point/mDice
-
           mode: max
       - class_path: lightning.pytorch.callbacks.LearningRateMonitor
         init_args:
@@ -33,10 +29,10 @@ fit:
     detect_anomaly: false
     barebones: false
     reload_dataloaders_every_n_epochs: 0
-    default_root_dir: experiment_logs/
+    default_root_dir: experiment_logs/lightning/
     wandb_config:
       name: Task3
-      project: SAM with Labels
+      project: Task3
       entity: ml-project-2023
       save_dir: experiment_logs
   model:
@@ -45,13 +41,13 @@ fit:
     train_prompt_encoder: true
     dice_loss_coef: 0.05
     focal_loss_coef: 1
-    # label_loss_coef: 0.1 # to check
+    label_loss_coef: 0.1 # to check
     iou_loss_coef: 1.0
-    # label_weight: [10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-    # model_kwargs:
-    #   iou_head_hidden_dim: 256
-    #   label_head_hidden_dim: 256
-    # prompt_3d_std: 0.2 # to check
+    label_weight: [20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    model_kwargs:
+      iou_head_hidden_dim: 256
+      label_head_hidden_dim: 256
+    prompt_3d_std: 0.2 # to check
       
     optimizer_type: AdamW
     optimizer_kwargs:
@@ -63,21 +59,13 @@ fit:
     focal_loss_params:
       alpha: 0.25
       gamma: 2
-    debug: False
+    debug: false
   data:
-    embedding_file_path: "/root/autodl-tmp/data_with_roi/embeddings"
-    datapoint_file_path: "/root/autodl-tmp/data_with_roi/datapoints"
+    embedding_file_path: "/root/autodl-tmp/data_without_crop/embeddings"
+    datapoint_file_path: "/root/autodl-tmp/data_without_crop/datapoints"
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5
     calculate_connected_mask: True
-
     debug: False
-  # data:
-  #     embedding_file_path: "/root/autodl-tmp/embeddings"
-  #     datapoint_file_path: "/root/autodl-tmp/datapoints"
-  #     model_type: "vit_h"
-  #     batch_size: 64
-  #     aug_per_img: 7
-  #     total_aug_per_img: 10
   ckpt_path: null
