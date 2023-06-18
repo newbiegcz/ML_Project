@@ -198,3 +198,7 @@ imgui.ini
 /experiment_logs/
 /processed_data/
 local_files/
+/extracted.pth
+/result/
+local_files/
+result.zip

@@ -86,7 +86,9 @@ class SamWithLabelPredictor:
         self.original_size = original_image_size
         self.input_size = tuple(transformed_image.shape[-2:])
         input_image = self.model.preprocess(transformed_image)
+        #print('start encoder...')
         self.features = self.model.image_encoder(input_image)
+        #print('end encoder...')
         self.is_image_set = True
 
     def predict(
@@ -95,7 +97,7 @@ class SamWithLabelPredictor:
         point_labels: Optional[np.ndarray] = None,
         box: Optional[np.ndarray] = None,
         mask_input: Optional[np.ndarray] = None,
-        multimask_output: bool = True,
+        prompt_3d: Optional[np.ndarray] = None,
         return_logits: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -150,20 +152,25 @@ class SamWithLabelPredictor:
         if mask_input is not None:
             mask_input_torch = torch.as_tensor(mask_input, dtype=torch.float, device=self.device)
             mask_input_torch = mask_input_torch[None, :, :, :]
+        if prompt_3d is not None:
+           assert self.original_size == (1024, 1024), "prompt_3d is only supported for 1024x1024 images."
+           prompt_3d_torch = torch.as_tensor(prompt_3d, dtype=torch.float, device=self.device)
+           prompt_3d_torch = prompt_3d_torch[None, :]
 
-        masks, iou_predictions, low_res_masks = self.predict_torch(
+        masks, iou_predictions, label_predictions, low_res_masks = self.predict_torch(
             coords_torch,
             labels_torch,
             box_torch,
             mask_input_torch,
-            multimask_output,
+            prompt_3d_torch,
             return_logits=return_logits,
         )
 
         masks_np = masks[0].detach().cpu().numpy()
         iou_predictions_np = iou_predictions[0].detach().cpu().numpy()
         low_res_masks_np = low_res_masks[0].detach().cpu().numpy()
-        return masks_np, iou_predictions_np, low_res_masks_np
+        label_predictions_np = label_predictions[0].detach().cpu().numpy()
+        return masks_np, iou_predictions_np, label_predictions_np, low_res_masks_np
 
     @torch.no_grad()
     def predict_torch(
@@ -172,7 +179,7 @@ class SamWithLabelPredictor:
         point_labels: Optional[torch.Tensor],
         boxes: Optional[torch.Tensor] = None,
         mask_input: Optional[torch.Tensor] = None,
-        multimask_output: bool = True,
+        prompt_3ds: Optional[torch.Tensor] = None,
         return_logits: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
@@ -225,6 +232,7 @@ class SamWithLabelPredictor:
             points=points,
             boxes=boxes,
             masks=mask_input,
+            prompt_3ds=prompt_3ds,
         )
 
         # Predict masks
@@ -233,8 +241,14 @@ class SamWithLabelPredictor:
             image_pe=self.model.prompt_encoder.get_dense_pe(),
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
-            multimask_output=multimask_output,
         )
+
+        # select the mask according to predicted label
+        argmax = torch.argmax(label_predictions, dim=1)
+        low_res_masks = low_res_masks[torch.arange(low_res_masks.shape[0]), argmax]
+        low_res_masks = low_res_masks[:,None,:,:]
+        iou_predictions = iou_predictions[torch.arange(iou_predictions.shape[0]), argmax]
+        iou_predictions = iou_predictions[:,None]
 
         # Upscale the masks to the original image resolution
         masks = self.model.postprocess_masks(low_res_masks, self.input_size, self.original_size)
