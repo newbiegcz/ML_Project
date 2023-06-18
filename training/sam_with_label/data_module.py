@@ -27,12 +27,14 @@ class MemoryDataModule(pl.LightningDataModule):
                 embedding_file_path=embedding_file_path,
                 datapoint_file_path=datapoint_file_path,
                 model_type=self.model_type,
+                key="training",
             )
     
         _validation_dataset = DiskCacheDataset(
             embedding_file_path=embedding_file_path,
             datapoint_file_path=datapoint_file_path,
             model_type=self.model_type,
+            key="validation",
         )
 
         self.train_image_cache = {}
@@ -115,6 +117,7 @@ class DiskDataModule(pl.LightningDataModule):
                  model_type: str = "vit_h",
                  batch_size: int = 128,
                  num_workers: int = 4,
+                 calculate_connected_mask: bool = True,
                  debug: bool = False
                 ):
         super().__init__()
@@ -130,6 +133,7 @@ class DiskDataModule(pl.LightningDataModule):
                 embedding_cache=self.embedding_cache,
                 datapoint_cache=self.datapoint_cache,
                 model_type=self.model_type,
+                calculate_connected_mask=calculate_connected_mask,
                 key="training",
             )
     
@@ -137,6 +141,7 @@ class DiskDataModule(pl.LightningDataModule):
                 embedding_cache=self.embedding_cache,
                 datapoint_cache=self.datapoint_cache,
                 model_type=self.model_type,
+                calculate_connected_mask=calculate_connected_mask,
                 key="validation",
             )
         

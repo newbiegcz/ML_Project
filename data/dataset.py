@@ -27,7 +27,8 @@ from monai.transforms import (
 # TODO: 考虑 cache encoder 的结果
 
 device = "cpu"
-data_dir = "/root/autodl-fs/raw_data/"
+data_dir = "/root/autodl-tmp/raw_data/"
+
 split_json = "dataset_0.json"
 
 datasets = data_dir + split_json
@@ -97,6 +98,7 @@ transforms = {
 class Dataset2D(data.Dataset):
     def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, compress=False):
         assert False, "This class is deprecated!"
+
         if first_only:
             files = files.copy()[:1]
 

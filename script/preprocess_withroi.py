@@ -162,7 +162,11 @@ new_val_transform = (
 )
 
 class Dataset2D(data.Dataset):
+<<<<<< predictor_debug
     def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, spacing=False):
+======
+    def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, compress=False):
+>> main
         if first_only:
             files = files.copy()[:1]
 
@@ -170,7 +174,8 @@ class Dataset2D(data.Dataset):
         self.device = device
         self.transform = transform
         set_track_meta(True)
-        if spacing:
+
+        if compress:
             _default_transform = Compose(
                 [
                     LoadImaged(keys=["image", "label"], ensure_channel_first=True, dtype=dtype),
@@ -233,8 +238,8 @@ seed_rng = torch.Generator(device='cpu')
 seed_rng.manual_seed(19260817)
 data_files_training = data_files["training"]
 data_files_validation = data_files["validation"]
-rraw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cpu'), transform=None, dtype=np.float32, spacing = True)
-rraw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, spacing = True)
+rraw_dataset_validation = Dataset2D(data_files_validation, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
+rraw_dataset_training = Dataset2D(data_files_training, device=torch.device('cpu'), transform=None, dtype=np.float32, compress = True)
 
 def gen_training(img, image_seed):
     with TorchSeed(image_seed):

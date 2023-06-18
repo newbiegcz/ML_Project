@@ -1,7 +1,4 @@
-
 from utils.predicter import LabelPredicter
-
-
 
 def test_predictor(**kwargs):
     predicter = LabelPredicter(sam_with_label, **kwargs)

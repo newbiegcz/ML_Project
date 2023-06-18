@@ -65,6 +65,7 @@ class LabelPredicter():
             labels = self.automatic_label_generator.generate_labels(image, height)
             res.append(labels)
             #tmp = np.zeros(14, dtype=np.float64)
+
             for i in range(13):
                 prediction_mask = labels == (i+1)
                 ground_truth_mask = ground_truth == (i+1)
@@ -79,10 +80,11 @@ class LabelPredicter():
             #if occur[i] == 0:
             #    print(i)
             #    assert(0)
+、
             if div[i] != 0:
                 dice[i] = intersection[i] / div[i]
         return res, dice
-    
+   
     def predict(self, file_key = 'validation', data_list_file_path = 'raw_data/dataset_0.json', save_path = 'result'):
         """
         predict all CT data in training set or validation set.
@@ -129,17 +131,21 @@ class LabelPredicter():
                 label = data['label'].numpy()
                 #print('image.shape', image.shape)
                 #print('label.shape', label.shape)
+
                 images_list.append(image)
                 ground_truths_list.append(label)
 
             # predict for single CT data
             print('evaluating...')
+
             labels, dice = self.predict_one(images_list, ground_truths_list)
             labels = np.array(labels)
             ground_truths_list = np.array(ground_truths_list)
             dices.append(np.mean(dice))
+
             print('dice: {}'.format(np.mean(dice)))
             print(dice)
+
             #print(labels.shape)
             #print(dice.shape)
             #print(dice)
@@ -151,6 +157,7 @@ class LabelPredicter():
             np.save(os.path.join(save_path, f'{file_name_without_extension}_pd_labels.npy'), labels)
             np.save(os.path.join(save_path, f'{file_name_without_extension}_gt_labels.npy'), ground_truths_list)
             np.save(os.path.join(save_path, f'{file_name_without_extension}_dice.npy'), dice)
+
         
         # output mdice
         mdice = np.mean(dices)
@@ -193,6 +200,7 @@ class LabelPredicter():
             file_name = os.path.basename(file_path)
             index_of_dot = file_name.index('.')
             file_name_without_extension = file_name[:index_of_dot] # img0035
+
             images, labels = d['image'][0], d['label'][0]
             h = images.shape[2]
             images_list = []
@@ -214,7 +222,9 @@ class LabelPredicter():
                 ground_truths_list.append(label)
 
             # predict for single CT data
+
             print('evaluating...')
+
             labels, dice = self.predict_one(images_list, ground_truths_list)
             labels = np.array(labels)
             ground_truths_list = np.array(ground_truths_list)

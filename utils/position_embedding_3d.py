@@ -9,7 +9,9 @@ class PositionalEncoding3D(torch.nn.Module):
         super().__init__()
         self.channels = channels
         self.channels_per_dim = channels // 6 * 2
-        self.register_buffer("inv_freq", 1.0 / (10000 ** (torch.arange(0, self.channels_per_dim, 2).float() / self.channels_per_dim)))
+        scale = 30.0
+        self.register_buffer("inv_freq", 1.0 / (10000 ** (torch.arange(0, self.channels_per_dim, 2).float() / self.channels_per_dim)) * scale)
+
     
     def forward(self, points):
         '''
@@ -23,4 +25,3 @@ class PositionalEncoding3D(torch.nn.Module):
         ret[:, :emb.shape[1]] = emb
         return ret
 
-    

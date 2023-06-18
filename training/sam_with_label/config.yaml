@@ -9,16 +9,19 @@ fit:
     accelerator: gpu
     strategy: auto
     devices: auto
-    max_epochs: 400
-    limit_train_batches: 0.01
+    max_epochs: 800
+    limit_train_batches: 0.02
+    limit_val_batches: 0.5
     num_nodes: 1
-    precision: 32-true
     callbacks:
       - class_path: lightning.pytorch.callbacks.model_checkpoint.ModelCheckpoint
         init_args:
           save_top_k: 10
-          monitor: val_Dice/mDice
+          monitor: validation/single_point/mDice
           mode: max
+      - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+        init_args:
+          logging_interval: step
     overfit_batches: 0
     check_val_every_n_epoch: 1
     log_every_n_steps: 10
@@ -31,7 +34,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-      name: dai ROI,wuzengguang
+      name: with_lowres_mask_prompt (Old positional embedding)
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -66,6 +69,9 @@ fit:
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5
+
+    calculate_connected_mask: True
+
     debug: False
   # data:
   #     embedding_file_path: "/root/autodl-tmp/embeddings"

@@ -12,7 +12,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from modeling.sam import SamWithLabel
 from modeling.predictor import SamWithLabelPredictor
+
 import cv2
+
 from third_party.segment_anything.utils.amg import (
     MaskData,
     area_from_rle,
@@ -162,6 +164,7 @@ class SamAutomaticLabelGenerator():
         idxs.sort(key=lambda x : masks[x]["predicted_iou"], reverse=True)
 
         self.predictor.set_image(image)
+
         #tmp = []
         vis = {}
         for idx in idxs:
@@ -309,7 +312,6 @@ class SamAutomaticLabelGenerator():
 
         return curr_anns
 
-
     def _generate_masks(self, image: np.ndarray, height: float, verbose=False) -> MaskData:
         orig_size = image.shape[:2]
         crop_boxes, layer_idxs = generate_crop_boxes(
@@ -380,7 +382,7 @@ class SamAutomaticLabelGenerator():
             iou_threshold=self.box_nms_thresh,
         )
         data.filter(keep_by_nms)
-        
+
         if verbose:
             print('After filter by nms within crop:', len(data["rles"]))
 
@@ -398,6 +400,7 @@ class SamAutomaticLabelGenerator():
         crop_box: List[int],
         orig_size: Tuple[int, ...],
         height: float,
+
         verbose=False
     ) -> MaskData:
         orig_h, orig_w = orig_size
@@ -453,16 +456,16 @@ class SamAutomaticLabelGenerator():
             keep_mask = prob[torch.arange(len(label)), label] > self.label_certainty_thresh
             data.filter(keep_mask)
 
-        
-
         #print('Before filter by IoU:', len(data["masks"]))
         if verbose:
             print('IoU predictions:', data["iou_preds"])
 
         # Filter by predicted IoU
+
         if True: #self.pred_iou_thresh > 0.0:
             label = data["label_preds"].argmax(dim=1)
             keep_mask = data["iou_preds"] > self.pred_iou_thresh[label]
+
             data.filter(keep_mask)
 
         if verbose:

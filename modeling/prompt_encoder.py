@@ -1,8 +1,9 @@
+from utils.position_embedding_3d import PositionalEncoding3D
+
 from third_party.segment_anything.modeling.prompt_encoder import PromptEncoder
 from typing import Optional, Tuple, Type
 import torch
 import torch.nn as nn
-import numpy as np
 
 class Prompt3DEncoder(PromptEncoder):
     def __init__(
@@ -18,11 +19,8 @@ class Prompt3DEncoder(PromptEncoder):
                          input_image_size=input_image_size,
                          mask_in_chans=mask_in_chans,
                          activation=activation)
-        self.register_buffer(
-            "positional_encoding_gaussian_matrix_3d",
-             torch.randn((3, self.embed_dim // 2)),
-        )
         self.embedding_3d = nn.Embedding(1, embed_dim)
+        self.position_embedding_3d = PositionalEncoding3D(embed_dim)
 
     def _get_batch_size(
         self,
@@ -46,13 +44,7 @@ class Prompt3DEncoder(PromptEncoder):
             return 1
         
     def _embed_prompt_3ds(self, prompt_3ds: torch.Tensor) -> torch.Tensor:
-        prompt_3ds = 2 * prompt_3ds - 1
-        prompt_3ds = prompt_3ds @ self.positional_encoding_gaussian_matrix_3d
-        prompt_3ds = 2 * torch.pi * prompt_3ds
-        positional_embeddings = torch.cat([torch.sin(prompt_3ds), torch.cos(prompt_3ds)], dim=-1)
-
-        return (positional_embeddings + self.embedding_3d.weight)[:, None, :]
-    
+        return (self.position_embedding_3d(prompt_3ds) + self.embedding_3d.weight)[:, None, :]
 
     def forward(
         self,
