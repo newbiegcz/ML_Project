@@ -9,16 +9,20 @@ fit:
     accelerator: gpu
     strategy: auto
     devices: auto
-    max_epochs: 400
-    limit_train_batches: 0.05
+    max_epochs: 800
+    limit_train_batches: 0.02
+    limit_val_batches: 0.5
     num_nodes: 1
-    precision: 32-true
     callbacks:
       - class_path: lightning.pytorch.callbacks.model_checkpoint.ModelCheckpoint
         init_args:
           save_top_k: 10
-          monitor: val_Dice/mDice
+          monitor: validation/single_point/mDice
+
           mode: max
+      - class_path: lightning.pytorch.callbacks.LearningRateMonitor
+        init_args:
+          logging_interval: step
     overfit_batches: 0
     check_val_every_n_epoch: 1
     log_every_n_steps: 10
@@ -29,9 +33,9 @@ fit:
     detect_anomaly: false
     barebones: false
     reload_dataloaders_every_n_epochs: 0
-    default_root_dir: experiment_logs/lightning/
+    default_root_dir: experiment_logs/
     wandb_config:
-      name: with label loss
+      name: Task3
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -41,8 +45,14 @@ fit:
     train_prompt_encoder: true
     dice_loss_coef: 0.05
     focal_loss_coef: 1
-    label_loss_coef: 0.01
-    iou_loss_coef: 0.5
+    # label_loss_coef: 0.1 # to check
+    iou_loss_coef: 1.0
+    # label_weight: [10, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+    # model_kwargs:
+    #   iou_head_hidden_dim: 256
+    #   label_head_hidden_dim: 256
+    # prompt_3d_std: 0.2 # to check
+      
     optimizer_type: AdamW
     optimizer_kwargs:
       lr: 0.0001
@@ -53,13 +63,21 @@ fit:
     focal_loss_params:
       alpha: 0.25
       gamma: 2
-    debug: false
+    debug: False
   data:
-    embedding_file_path: "/root/autodl-tmp/embeddings"
-    datapoint_file_path: "/root/autodl-tmp/datapoints"
+    embedding_file_path: "/root/autodl-tmp/data_with_roi/embeddings"
+    datapoint_file_path: "/root/autodl-tmp/data_with_roi/datapoints"
     model_type: "vit_h"
     batch_size: 64
-    num_workers: 4    # 在服务器应当调整
-    debug: False
+    num_workers: 5
+    calculate_connected_mask: True
 
+    debug: False
+  # data:
+  #     embedding_file_path: "/root/autodl-tmp/embeddings"
+  #     datapoint_file_path: "/root/autodl-tmp/datapoints"
+  #     model_type: "vit_h"
+  #     batch_size: 64
+  #     aug_per_img: 7
+  #     total_aug_per_img: 10
   ckpt_path: null
