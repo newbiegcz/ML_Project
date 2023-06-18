@@ -189,7 +189,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
             sparse_embeddings, dense_embeddings = self.model.prompt_encoder(
                                     points=(point_coords, point_labels) if point_coords is not None else None,
                                     boxes=bounding_boxes,
-                                    masks=None, # TODO? prev_masks.unsqueeze(1) if prev_masks is not None else None,
+                                    masks=prev_masks.unsqueeze(1) if prev_masks is not None else None, # TODO 对吗？
                                 )
         # print("get_logits1", torch.cuda.memory_allocated(), torch.cuda.memory_cached())
         batch_masks, batch_ious = self.model.mask_decoder(
