@@ -8,6 +8,10 @@ import cv2
 import torch
 import numpy as np
 
+import cv2
+import torch
+import numpy as np
+
 class DiskCacheDataset(Dataset):
 
     def __init__(self, *,
@@ -31,6 +35,8 @@ class DiskCacheDataset(Dataset):
 
         self.num_image = self.embedding_cache["num_image_for_" + self.key]
         self.num_datapoints = self.datapoint_cache["num_datapoints_for_" + self.key]
+        
+        self.calculate_connected_mask = True
 
         self.calculate_connected_mask = True
 

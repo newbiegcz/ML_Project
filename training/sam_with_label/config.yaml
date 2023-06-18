@@ -17,11 +17,11 @@ fit:
       - class_path: lightning.pytorch.callbacks.model_checkpoint.ModelCheckpoint
         init_args:
           save_top_k: 10
-<<<<<<< HEAD
+to fix
           monitor: val_Dice/prompt1/mDice
-=======
+
           monitor: validation/single_point/mDice
->>>>>>> 3e78707881e6b08d61a1fc82c7ad7279eaccb3d3
+
           mode: max
       - class_path: lightning.pytorch.callbacks.LearningRateMonitor
         init_args:
@@ -38,11 +38,8 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-<<<<<<< HEAD
-      name: task2_pass_mask
-=======
       name: with_lowres_mask_prompt (Old positional embedding)
->>>>>>> 3e78707881e6b08d61a1fc82c7ad7279eaccb3d3
+
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
@@ -77,13 +74,8 @@ fit:
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5
-<<<<<<< HEAD
-    calculate_connected_mask: True
-=======
-
     calculate_connected_mask: True
 
->>>>>>> 3e78707881e6b08d61a1fc82c7ad7279eaccb3d3
     debug: False
   # data:
   #     embedding_file_path: "/root/autodl-tmp/embeddings"
