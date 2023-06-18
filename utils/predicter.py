@@ -60,20 +60,20 @@ class LabelPredicter():
         #occur = np.zeros(13,dtype=np.uint64)
         idx = 0
         for (image, ground_truth) in tqdm(zip(images, ground_truths), desc="slice"):
-            print('idx: {}'.format(idx))
+            #print('idx: {}'.format(idx))
             height = idx / len(images)
             labels = self.automatic_label_generator.generate_labels(image, height)
             res.append(labels)
-            tmp = np.zeros(14, dtype=np.float64)
+            #tmp = np.zeros(14, dtype=np.float64)
             for i in range(13):
                 prediction_mask = labels == (i+1)
                 ground_truth_mask = ground_truth == (i+1)
                 intersection[i] += 2 * np.sum(prediction_mask & ground_truth_mask)
                 div[i] += np.sum(prediction_mask) + np.sum(ground_truth_mask)
-                tmp[i] = 2 * np.sum(prediction_mask & ground_truth_mask) / (np.sum(prediction_mask) + np.sum(ground_truth_mask))
+                #tmp[i] = 2 * np.sum(prediction_mask & ground_truth_mask) / (np.sum(prediction_mask) + np.sum(ground_truth_mask))
                 #occur[i] += np.sum(ground_truth_mask)
             idx += 1
-            print('dice array:', tmp)
+            #print('dice array:', tmp)
         dice = np.zeros(13, dtype=np.float64)
         for i in range(13):
             #if occur[i] == 0:
@@ -83,7 +83,7 @@ class LabelPredicter():
                 dice[i] = intersection[i] / div[i]
         return res, dice
     
-    def predict(self, file_key = 'validation', data_list_file_path = 'raw_data/dataset_0.json'):
+    def predict(self, file_key = 'validation', data_list_file_path = 'raw_data/dataset_0.json', save_path = 'result'):
         """
         predict all CT data in training set or validation set.
 
@@ -133,7 +133,7 @@ class LabelPredicter():
                 ground_truths_list.append(label)
 
             # predict for single CT data
-            # print('predicting one...')
+            print('evaluating...')
             labels, dice = self.predict_one(images_list, ground_truths_list)
             labels = np.array(labels)
             ground_truths_list = np.array(ground_truths_list)
@@ -145,12 +145,12 @@ class LabelPredicter():
             #print(dice)
 
             # save labels and dice to file
-            if not os.path.exists('result'):
-                os.mkdir('result')
-            np.save(f'result/{file_name_without_extension}_imgs.npy', images_list)
-            np.save(f'result/{file_name_without_extension}_pd_labels.npy', labels)
-            np.save(f'result/{file_name_without_extension}_gt_labels.npy', ground_truths_list)
-            np.save(f'result/{file_name_without_extension}_dice.npy', dice)
+            if not os.path.exists(save_path):
+                os.mkdir(save_path)
+            np.save(os.path.join(save_path, f'{file_name_without_extension}_imgs.npy'), images_list)
+            np.save(os.path.join(save_path, f'{file_name_without_extension}_pd_labels.npy'), labels)
+            np.save(os.path.join(save_path, f'{file_name_without_extension}_gt_labels.npy'), ground_truths_list)
+            np.save(os.path.join(save_path, f'{file_name_without_extension}_dice.npy'), dice)
         
         # output mdice
         mdice = np.mean(dices)
@@ -193,7 +193,6 @@ class LabelPredicter():
             file_name = os.path.basename(file_path)
             index_of_dot = file_name.index('.')
             file_name_without_extension = file_name[:index_of_dot] # img0035
-
             images, labels = d['image'][0], d['label'][0]
             h = images.shape[2]
             images_list = []
@@ -215,7 +214,7 @@ class LabelPredicter():
                 ground_truths_list.append(label)
 
             # predict for single CT data
-            # print('predicting one...')
+            print('evaluating...')
             labels, dice = self.predict_one(images_list, ground_truths_list)
             labels = np.array(labels)
             ground_truths_list = np.array(ground_truths_list)

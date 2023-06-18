@@ -34,7 +34,8 @@ datasets = data_dir + split_json
 
 data_files = {
     "training": load_decathlon_datalist(datasets, True, "training"),
-    "validation": load_decathlon_datalist(datasets, True, "validation")
+    "validation": load_decathlon_datalist(datasets, True, "validation"),
+    "test": load_decathlon_datalist(datasets, True, "test"),
 }
 
 class DictTransform:

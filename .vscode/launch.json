@@ -14,10 +14,10 @@
         },
 
         {
-            "name": "Python: scripts.test_predictor 模块",
+            "name": "Python: test.test_trained_sam.test_predictor 模块",
             "type": "python",
             "request": "launch",
-            "module": "script.test_predictor",
+            "module": "test.test_trained_sam.test_predictor",
             "console": "integratedTerminal",
             "justMyCode": false
         },
