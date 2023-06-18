@@ -159,7 +159,7 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         )
         self.cross_entropy_loss = nn.CrossEntropyLoss().to(self.device)
         self.training_dice_metrics = [DiceMetric() for i in range(ITERATE_OVER+1)]
-        self.validation_dice_metric = DiceMetric()
+        self.validation_dice_metrics = [DiceMetric() for i in range(ITERATE_OVER+1)]
     
     def get_logits(self,
                    batch: dict,
@@ -247,15 +247,8 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         iou_loss = ((iou - batch_iou) ** 2).mean()
 
         return segmentation_loss, iou_loss, _dice_loss, _focal_loss
-
-    def training_step(self, batch, batch_idx):
-        opt = self.optimizers()
-        opt.zero_grad()
-
-        # print("training_step0", torch.cuda.memory_allocated())
-        # calculate binary_label
-
-        # batch = clean_up_batch(batch)
+    
+    def evaluate_on_batch(self, batch, train, dice_metrics):
         img_size = 1024
         B = len(batch['connected_mask'])
         lowres_mask = torch.nn.functional.interpolate(
@@ -265,10 +258,10 @@ class SAMWithInteractiveTraining(pl.LightningModule):
         )
         binary_label = lowres_mask[:, 0]
 
-        # concatenate x and y coordinates
-        # print("training_step1", torch.cuda.memory_allocated())
         batch = batch.copy()
-        # if coin flip is heads, start with a point prompt
+
+        total_loss = None
+
         for prompt in range(2):
             if prompt == 0:
                 point_coords = torch.cat((batch['prompt'][0].reshape(-1, 1), batch['prompt'][1].reshape(-1, 1)), dim=1)[:, None, :]
@@ -382,11 +375,29 @@ class SAMWithInteractiveTraining(pl.LightningModule):
                 # batch?
             
                 # get loss
-                segmentation_loss, iou_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, self.training_dice_metrics[_+1-prompt])
+                segmentation_loss, iou_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, dice_metrics[_+1-prompt])
                 loss = self.iou_loss_coef * iou_loss + segmentation_loss
                 if prompt == 1: loss *= bounding_box_coef
-                self.manual_backward(loss)
-            
+                if train: self.manual_backward(loss)
+                if total_loss is None:
+                    total_loss = loss
+                else:
+                    total_loss += loss
+        return total_loss, iou_loss, segmentation_loss, _dice_loss, _focal_loss
+
+    def training_step(self, batch, batch_idx):
+        opt = self.optimizers()
+        opt.zero_grad()
+
+        # print("training_step0", torch.cuda.memory_allocated())
+        # calculate binary_label
+
+        # batch = clean_up_batch(batch)
+
+        # concatenate x and y coordinates
+        # print("training_step1", torch.cuda.memory_allocated())
+        
+        loss, iou_loss, segmentation_loss, _dice_loss, _focal_loss = self.evaluate_on_batch(batch, True, self.training_dice_metrics)
 
         ##### Logging
         self.log("train_loss/total_loss", loss)
@@ -419,15 +430,18 @@ class SAMWithInteractiveTraining(pl.LightningModule):
 
         batch_mask, batch_iou = self.get_logits(batch, point_coords, point_labels, None, None)
 
-        segmentation_loss, iou_loss, _dice_loss, _focal_loss = self.get_loss_and_update_metric(batch, batch_mask, batch_iou, self.validation_dice_metric)
-
-        loss = self.iou_loss_coef * iou_loss + segmentation_loss
+        loss, iou_loss, segmentation_loss, _dice_loss, _focal_loss = self.evaluate_on_batch(batch, False, self.validation_dice_metrics)
 
         self.log("val_loss/total_loss", loss)
         self.log("val_loss/iou_loss", iou_loss)
         self.log("val_loss/segmentation_loss", segmentation_loss)
         self.log("val_loss/dice_loss", _dice_loss)
         self.log("val_loss/focal_loss", _focal_loss)
+        for _ in range(ITERATE_OVER+1):
+            mdice, avg_dice = self.validation_dice_metrics[_].get_metrics()
+            self.log(f"train_Dice/prompt{_}/mDice", mdice)
+            for i in range(14):
+                self.log(f"train_Dice/prompt{_}/Dice{i}", avg_dice[i])
         return loss
 
     def on_validation_epoch_end(self):
