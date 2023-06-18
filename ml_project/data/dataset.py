@@ -20,14 +20,8 @@ from monai.transforms import (
     EnsureTyped,
 )
 
-# TODO: 数据增广，特别是 RGB & 随机漂移
-
-# TODO: 把 3d array cache 到内存里
-
-# TODO: 考虑 cache encoder 的结果
-
 device = "cpu"
-data_dir = "/root/autodl-tmp/raw_data/"
+data_dir = "raw_data/"
 
 split_json = "dataset_0.json"
 
@@ -254,9 +248,6 @@ class Dataset3D(data.Dataset):
                 self.rx[i] = min(dx - 1, self.rx[i] + deltax)
                 self.ly[i] = max(0, self.ly[i] - deltay)
                 self.ry[i] = min(dy - 1, self.ry[i] + deltay)
-
-                print(self.lx[i], self.rx[i], self.ly[i], self.ry[i], self.lz[i], self.rz[i])
-
 
     def __len__(self):
         return len(self.cache)

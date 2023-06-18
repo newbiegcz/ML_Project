@@ -1,8 +1,8 @@
-from modeling.sam import SamWithLabel
+from ..modeling.sam import SamWithLabel
 import numpy as np
 from typing import List, Tuple
 from tqdm import tqdm
-from utils.automatic_label_generator import SamAutomaticLabelGenerator
+from ..utils.automatic_label_generator import SamAutomaticLabelGenerator
 from monai.transforms import (
     Compose,
     CropForegroundd,
@@ -18,9 +18,9 @@ from monai.data import (
     CacheDataset
 )
 
-from data.dataset import get_dataset_3d
+from ..data.dataset import get_dataset_3d
 
-from data.dataset import DictTransform, PreprocessForModel
+from ..data.dataset import DictTransform, PreprocessForModel
 import torchvision
 import os
 
@@ -80,12 +80,12 @@ class LabelPredicter():
             #if occur[i] == 0:
             #    print(i)
             #    assert(0)
-、
+
             if div[i] != 0:
                 dice[i] = intersection[i] / div[i]
         return res, dice
    
-    def predict(self, file_key = 'validation', data_list_file_path = 'raw_data/dataset_0.json', save_path = 'result'):
+    def predict(self, save_path = 'result', file_key="validation"):
         """
         predict all CT data in training set or validation set.
 

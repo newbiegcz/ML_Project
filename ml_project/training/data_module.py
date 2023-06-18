@@ -1,7 +1,7 @@
 import lightning.pytorch as pl
 
 from torch.utils.data import DataLoader, Dataset
-from data.cache_dataset import DiskCacheDataset
+from ..data.cache_dataset import DiskCacheDataset
 from tqdm import tqdm
 import diskcache
 

@@ -1,22 +1,6 @@
 #do not import this!!!!
 assert(__name__ == "__main__")
 
-'''
-This script is used to preprocess the data and save it to disk.
-
-The data is saved in the following format:
-    datapoints: A list of datapoints, each datapoint is a dictionary with the following keys:
-        image_id: The image id(the id in the dictionary of embeddings)
-        prompt_point: The prompt point
-        prompt_box: The prompt box
-        mask_cls: The mask class
-
-    embeddings: A dictionary of embeddings, each embedding is a dictionary with the following keys:
-        embedding: The embedding
-        low_res_image: The low resolution image
-        label: The label
-
-'''
 import diskcache
 import torch
 from torch.utils.data import Dataset
@@ -28,16 +12,18 @@ import matplotlib.pyplot as plt
 import random
 import albumentations 
 import albumentations.pytorch.transforms
-from data.dataset import PreprocessForModel
-from data.dataset import DictTransform
+from ml_project.data.dataset import PreprocessForModel
+from ml_project.data.dataset import DictTransform
 import cv2
 import rich
-from data.dataset import Dataset2D
-from modeling.build_sam import build_pretrained_encoder
-from data.dataset import data_files
+from ml_project.data.dataset import Dataset2D
+from ml_project.modeling.build_sam import build_pretrained_encoder
+from ml_project.data.dataset import data_files
 from tqdm import tqdm
-import utils.visualize as viz
+import ml_project.utils.visualize as viz
 from collections import namedtuple
+import os
+import argparse
 
 from monai.data import (
     load_decathlon_datalist,
@@ -57,9 +43,16 @@ from monai.transforms import (
     EnsureTyped,
 )
 
+# parse arguments
+parser = argparse.ArgumentParser(description='Preprocess data')
+parser.add_argument('datapoints_disk_path', metavar='datapoints_disk_path', type=str, help='path to datapoints disk cache')
+parser.add_argument('embedding_disk_path', metavar='embedding_disk_path', type=str, help='path to embedding disk cache')
+
+args = parser.parse_args()
+datapoints_disk_path = args.datapoints_disk_path
+embedding_disk_path = args.embedding_disk_path
+
 checkpoint_path = "checkpoint/sam_vit_h_4b8939.pth"
-datapoints_disk_path = "/root/autodl-tmp/data_with_roi/datapoints"
-embedding_disk_path = "/root/autodl-tmp/data_with_roi/embeddings"
 
 size_threshold_in_bytes= 500 * 1024 * 1024 * 1024 # 500 GB
 debug = False
@@ -162,11 +155,7 @@ new_val_transform = (
 )
 
 class Dataset2D(data.Dataset):
-<<<<<< predictor_debug
-    def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, spacing=False):
-======
     def __init__(self, files, *, device, transform, dtype=np.float64, first_only=False, compress=False):
->> main
         if first_only:
             files = files.copy()[:1]
 
@@ -174,7 +163,6 @@ class Dataset2D(data.Dataset):
         self.device = device
         self.transform = transform
         set_track_meta(True)
-
         if compress:
             _default_transform = Compose(
                 [
@@ -311,13 +299,13 @@ def preprocess(rraw_dataset, c, gen, times, is_training):
         rx[i] = min(dx - 1, rx[i] + deltax)
         ly[i] = max(0, ly[i] - deltay)
         ry[i] = min(dy - 1, ry[i] + deltay)
-        print(lx[i], rx[i], ly[i], ry[i], lz[i], rz[i])
+        # print(lx[i], rx[i], ly[i], ry[i], lz[i], rz[i])
 
     num_image = 0
     for i in range(c):
         num_image += ((rz[i] - lz[i] + 1) * times)
         
-    print(num_image)
+    # print(num_image)
 
     lst_points = np.zeros((num_image, 14, time_points, 4), dtype=np.float32)
     lengths = np.zeros((num_image, 14), dtype=np.int32)

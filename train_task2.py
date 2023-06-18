@@ -1,9 +1,8 @@
 from collections import namedtuple
 from typing import Any, Dict
 from lightning.pytorch import Trainer
-import lightning.pytorch as pl
 from lightning.pytorch.cli import LightningCLI
-from ml_project.training.task3.model_module import SAMWithLabelModule
+from ml_project.training.task2.model_module import SAMWithInteractiveTraining
 from ml_project.training.data_module import DiskDataModule
 from lightning.pytorch.loggers.wandb import WandbLogger
 import torch.multiprocessing as multiprocessing
@@ -21,10 +20,10 @@ class MyTrainer(Trainer):
         super().__init__(logger=logger, **kwargs)
 
 def cli_main():
-    cli = MyLightningCLI(SAMWithLabelModule, DiskDataModule,
+    cli = MyLightningCLI(SAMWithInteractiveTraining, DiskDataModule,
         trainer_class=MyTrainer,
         parser_kwargs={
-            "default_config_files": ["configs/task3_config.yaml"],   
+            "default_config_files": ["configs/task2_config.yaml"],   
         },
         save_config_callback=None)
 

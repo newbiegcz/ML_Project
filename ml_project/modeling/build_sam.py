@@ -3,9 +3,9 @@ from .sam import SamWithLabel
 from .prompt_encoder import Prompt3DEncoder
 import torch
 
-from third_party.segment_anything.modeling.image_encoder import ImageEncoderViT
-from third_party.segment_anything.modeling.transformer import TwoWayTransformer
-from third_party.segment_anything.modeling.prompt_encoder import PromptEncoder
+from ..third_party.segment_anything.modeling.image_encoder import ImageEncoderViT
+from ..third_party.segment_anything.modeling.transformer import TwoWayTransformer
+from ..third_party.segment_anything.modeling.prompt_encoder import PromptEncoder
 from .decoder import MaskLabelDecoder
 
 prompt_embed_dim = 256

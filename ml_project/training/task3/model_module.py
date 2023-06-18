@@ -1,17 +1,17 @@
 import lightning.pytorch as pl
-from third_party.segment_anything.build_sam import build_sam_vit_h
-from modeling.build_sam import sam_with_label_model_registry
-from third_party.segment_anything.build_sam import sam_model_registry
+from ...third_party.segment_anything.build_sam import build_sam_vit_h
+from ...modeling.build_sam import sam_with_label_model_registry
+from ...third_party.segment_anything.build_sam import sam_model_registry
 import torch
 import wandb
 import torch.optim as optim
 import torch.nn as nn
-from .losses import SegmentationLoss
-from utils.visualize import default_label_names
+from ..losses import SegmentationLoss
+from ...utils.visualize import default_label_names
 from typing import List
 # import utils.visualize as visualize
-from modeling.build_sam import pretrained_checkpoints
-from third_party.warmup_scheduler.scheduler import GradualWarmupScheduler
+from ...modeling.build_sam import pretrained_checkpoints
+from ...third_party.warmup_scheduler.scheduler import GradualWarmupScheduler
 
 class DiceMetric():
     def __init__(self):

@@ -1,10 +1,9 @@
-from utils.predicter import LabelPredicter
-from modeling.build_sam import sam_with_label_model_registry, build_pretrained_encoder
+from ml_project.utils.predicter import LabelPredicter
+from ml_project.modeling.build_sam import sam_with_label_model_registry, build_pretrained_encoder
 import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--checkpoint', type=str, default="checkpoint/extracted.pth")
-parser.add_argument('--data_list_file_path', type=str, default="raw_data/dataset_0.json")
 parser.add_argument('--file_key', type=str, default="validation")
 parser.add_argument('--save_path', type=str, default="result")
 parser.add_argument('--device', type=str, default="cuda")

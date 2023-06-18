@@ -61,8 +61,8 @@ fit:
       gamma: 2
     debug: false
   data:
-    embedding_file_path: "/root/autodl-tmp/data_without_crop/embeddings"
-    datapoint_file_path: "/root/autodl-tmp/data_without_crop/datapoints"
+    embedding_file_path: "/root/autodl-tmp/data_with_roi/embeddings"
+    datapoint_file_path: "/root/autodl-tmp/data_with_roi/datapoints"
     model_type: "vit_h"
     batch_size: 64
     num_workers: 5

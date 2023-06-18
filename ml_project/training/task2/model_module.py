@@ -1,20 +1,11 @@
 import lightning.pytorch as pl
-from .losses import SegmentationLoss
+from ..losses import SegmentationLoss
 import torch.nn as nn
 import torch
 import torch.optim as optim
 import torch.nn as nn
-from sam_grad.build_sam import sam_with_gradients_model_registry, pretrained_checkpoints
-from third_party.segment_anything.build_sam import sam_model_registry
-
-
-# TODO
-# - [x?] 整多个 metric[]，对每个metric进行log
-# - [x?] 把batch["label"]改成batch["connected_mask"]
-# - [x?] 随机决定选点/矩形改掉
-# NOTE
-# - 没有在新prompt里传入前一个prompt的mask
-# - self.optimizers()
+from ...sam_grad.build_sam import sam_with_gradients_model_registry, pretrained_checkpoints
+from ...third_party.segment_anything.build_sam import sam_model_registry
 
 ITERATE_OVER = 4 # NOTE 论文里是8
 bounding_box_coef = 1 # 因为 bounding_box 和点一起训练，所以需要一个参数调整它们相互的权值
@@ -26,18 +17,6 @@ def iou_func(pred_binary_mask, binary_label):
     intersection = torch.count_nonzero(pred_binary_mask & binary_label, dim=1)
     union = torch.count_nonzero(pred_binary_mask | (binary_label), dim=1)
     return intersection / union
-
-# def clean_up_batch(batch):
-#     mask_cls = batch['mask_cls']
-#     is_foreground_label = mask_cls != 0
-#     # print(is_foreground_label.shape, is_foreground_label)
-#     batch['embedding'] = batch['embedding'][is_foreground_label]
-#     # print(batch['prompt'])
-#     # print(batch['prompt'][0])
-#     batch['prompt'] = [batch['prompt'][0][is_foreground_label], batch['prompt'][1][is_foreground_label]]
-#     batch['connected_mask'] = batch['connected_mask'][is_foreground_label]
-#     batch['mask_cls'] = batch['mask_cls'][is_foreground_label]
-#     return batch
 
 def print_all_tensors(model):
     # Get a list of all tensors allocated on the GPU

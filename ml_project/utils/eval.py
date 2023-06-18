@@ -35,9 +35,9 @@ def evaluate(predicter, data, max_point, require_box, consider_connecting):
                     nn += 1
         
             dice_val += (cur_dice / nn)
-            print(cur_dice / nn)
+            # print(cur_dice / nn)
         
-        print(dice_val / num_people)
+        # print(dice_val / num_people)
         res_p.append(dice_val / num_people)
     
     if require_box:
@@ -69,9 +69,9 @@ def evaluate(predicter, data, max_point, require_box, consider_connecting):
                     nn += 1
         
             dice_val += (cur_dice / nn)
-            print(cur_dice / nn)
+            # print(cur_dice / nn)
         
-        print(dice_val / num_people)
+        # print(dice_val / num_people)
         res_b = dice_val / num_people
-            
+        
     return res_p, res_b

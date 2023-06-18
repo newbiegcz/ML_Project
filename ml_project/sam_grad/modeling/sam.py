@@ -2,7 +2,7 @@ import torch
 
 from typing import Any, Dict, List, Tuple
 
-from third_party.segment_anything.modeling.sam import Sam
+from ...third_party.segment_anything.modeling.sam import Sam
 
 class SamWithGradients(Sam):
     def forward(

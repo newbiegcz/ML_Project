@@ -2,10 +2,10 @@ import torch
 
 from typing import Any, Dict, List, Tuple
 
-from third_party.segment_anything.modeling.sam import Sam
-from third_party.segment_anything.modeling.image_encoder import ImageEncoderViT
-from third_party.segment_anything.modeling.transformer import TwoWayTransformer
-from third_party.segment_anything.modeling.prompt_encoder import PromptEncoder
+from ..third_party.segment_anything.modeling.sam import Sam
+from ..third_party.segment_anything.modeling.image_encoder import ImageEncoderViT
+from ..third_party.segment_anything.modeling.transformer import TwoWayTransformer
+from ..third_party.segment_anything.modeling.prompt_encoder import PromptEncoder
 from .decoder import MaskLabelDecoder
 
 

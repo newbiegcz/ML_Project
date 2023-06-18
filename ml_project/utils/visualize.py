@@ -9,8 +9,7 @@ import time
 import rich
 import torch
 import numpy as np
-import data.dataset as dataset
-import third_party.imgui_datascience.imgui_cv as imgui_cv
+from ..third_party.imgui_datascience import imgui_cv
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
@@ -496,18 +495,3 @@ def add_object_2d(name, *, image, pd_label=None, gt_label=None, prompt_points=No
 
 def add_object_3d(name, *, image, pd_label=None, gt_label=None, prompt_points=None, label_name=None, background_label=0, extras=None):
     add_object(name, "3D", image, pd_label, gt_label, prompt_points, label_name, background_label, extras)
-
-if __name__=="__main__":
-    initialize_window()
-    loader = dataset.get_dataloader_2d("training", "naive_to_rgb", batch_size=1, shuffle=False, device="cpu", first_only=True)
-    for data in loader:
-        if (data['label'][0] != 0).sum() <= 1000:
-            continue
-        add_object_2d("test", 
-                        image=data['image'][0],
-                        pd_label=None,
-                        gt_label=None,
-                        prompt_points=[((100, 100), 1), ((200, 200), 0)],
-                        label_name=default_label_names,
-                        background_label=0)
-        break

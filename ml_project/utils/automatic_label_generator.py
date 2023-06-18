@@ -10,12 +10,12 @@ from torchvision.ops.boxes import batched_nms, box_area  # type: ignore
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from modeling.sam import SamWithLabel
-from modeling.predictor import SamWithLabelPredictor
+from ..modeling.sam import SamWithLabel
+from ..modeling.predictor import SamWithLabelPredictor
 
 import cv2
 
-from third_party.segment_anything.utils.amg import (
+from ..third_party.segment_anything.utils.amg import (
     MaskData,
     area_from_rle,
     batch_iterator,

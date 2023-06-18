@@ -1,17 +1,13 @@
-import data.dataset
-import model.prompter
-import utils.eval
-import gc
+import ml_project.data.dataset
+import ml_project.utils.prompter
+import ml_project.utils.eval
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from data.dataset import get_dataset_3d
-from third_party.segment_anything import SamPredictor, sam_model_registry
-import torch
+from ml_project.data.dataset import get_dataset_3d
+from ml_project.third_party.segment_anything import SamPredictor, sam_model_registry
 
 dataset_3d = get_dataset_3d('validation', crop_roi=True)
-
-from modeling.build_sam import sam_with_label_model_registry, build_pretrained_encoder
 
 model_checkpoint = "checkpoint/sam_vit_h_4b8939.pth"
 model_type = "vit_h"
@@ -20,7 +16,7 @@ sam = sam_model_registry[model_type](checkpoint=model_checkpoint).cuda()
 
 sam_predictor = SamPredictor(sam)
 
-Promptor = model.prompter.Prompter()
+Promptor = ml_project.utils.prompter.Prompter()
 
 import matplotlib.pyplot as plt
 def show_points(coords, labels, ax, marker_size=375):
@@ -75,9 +71,8 @@ def predict(image, label, number_points, points = True, box = False, consider_co
 
     return result
 
-
 n_c = 5
-res_p, res_b = utils.eval.evaluate(predict, dataset_3d, n_c, True, True)
+res_p, res_b = ml_project.utils.eval.evaluate(predict, dataset_3d, n_c, True, True)
 
 for i in range(n_c):
     print("%d: %lf" %(i + 1, res_p[i]))

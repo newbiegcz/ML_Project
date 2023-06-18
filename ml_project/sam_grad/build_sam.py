@@ -2,9 +2,9 @@ from functools import partial
 from .modeling.sam import SamWithGradients
 import torch
 
-from third_party.segment_anything.modeling.image_encoder import ImageEncoderViT
-from third_party.segment_anything.modeling.transformer import TwoWayTransformer
-from third_party.segment_anything.modeling.prompt_encoder import PromptEncoder
+from ..third_party.segment_anything.modeling.image_encoder import ImageEncoderViT
+from ..third_party.segment_anything.modeling.transformer import TwoWayTransformer
+from ..third_party.segment_anything.modeling.prompt_encoder import PromptEncoder
 from .modeling.mask_decoder import MaskDecoder
 
 prompt_embed_dim = 256

@@ -2,7 +2,7 @@ import argparse
 import os
 import lightning.pytorch as pl
 import torch
-from ml_project.training.task2.model_module import SAMWithLabelModule
+from ml_project.training.task3.model_module import SAMWithLabelModule
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Extract model from checkpoint')
@@ -20,6 +20,7 @@ if __name__ == "__main__":
         print("Output path already exists")
         exit(1)
     
+    args.output = os.path.abspath(args.output)
     if not os.path.exists(os.path.dirname(args.output)):
         print("Output directory does not exist")
         exit(1)

@@ -1,5 +1,5 @@
 import numpy as np
-import utils.visualize as visualize
+import ml_project.utils.visualize as visualize
 import argparse
 import os
 
