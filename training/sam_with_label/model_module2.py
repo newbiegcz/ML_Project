@@ -350,10 +350,23 @@ class SAMWithInteractiveTraining(pl.LightningModule):
                     x, y = random_position
                     # random_position = random_position.unsqueeze(0)
                     # print(random_position.shape)
-                    batch_nonzero_indices[j] = random_position
+                    batch_nonzero_indices[j] = torch.Tensor([y, x]) * 4
                     # unpack Tensor random_position
                     # don't forget to mark foreground/background!
                     batch_point_label[j] = binary_label[j][x][y]
+                    """
+                    if j == 0:
+                        if _ == 0:
+                            print("binary_label")
+                            print_miniature(binary_label[j])
+                        print(prompt, _, j)
+                        print("random_position")
+                        print(random_position, batch_point_label[j])
+                        print("point_coords")
+                        print(point_coords)
+                        print("pred_binary_mask")
+                        print_miniature(pred_binary_mask[j])
+                    """
 
                 # pick the corresponding position in binary_label and pred_binary_mask
                 # print("training_step5", _, torch.cuda.memory_allocated())

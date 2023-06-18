@@ -17,7 +17,7 @@ fit:
       - class_path: lightning.pytorch.callbacks.model_checkpoint.ModelCheckpoint
         init_args:
           save_top_k: 10
-          monitor: val_Dice/mDice
+          monitor: val_Dice/prompt1/mDice
           mode: max
       - class_path: lightning.pytorch.callbacks.LearningRateMonitor
         init_args:
@@ -34,7 +34,7 @@ fit:
     reload_dataloaders_every_n_epochs: 0
     default_root_dir: experiment_logs/lightning/
     wandb_config:
-      name: scheduler_test
+      name: task2_pass_mask
       project: SAM with Labels
       entity: ml-project-2023
       save_dir: experiment_logs
