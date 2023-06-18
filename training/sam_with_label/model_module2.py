@@ -16,8 +16,8 @@ from third_party.segment_anything.build_sam import sam_model_registry
 # - 没有在新prompt里传入前一个prompt的mask
 # - self.optimizers()
 
-ITERATE_OVER = 8 # NOTE 论文里是8
-bounding_box_coef = ITERATE_OVER # 因为 bounding_box 和点一起训练，所以需要一个参数调整它们相互的权值
+ITERATE_OVER = 4 # NOTE 论文里是8
+bounding_box_coef = 1 # 因为 bounding_box 和点一起训练，所以需要一个参数调整它们相互的权值
 
 def iou_func(pred_binary_mask, binary_label):
     B = pred_binary_mask.shape[0]
